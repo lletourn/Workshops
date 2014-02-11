@@ -13,10 +13,10 @@ The initial structure of your folders should look like this:
 ```
 
 ### Be sure to set 
-JOB_MAIL  == email in which to receive job completion events
-WORK_DIR == Your designated work directory
 ```
+# email in which to receive job completion events
 export JOB_MAIL=dude@cool.com
+# Your designated work directory
 export WORK_DIR=/dev/null
 
 export MUGQIC_INSTALL_HOME=/sb/programs/analyste
@@ -98,6 +98,25 @@ But it requires special ordering.
 Look at count.sh
 
 run the first lines until htseq.
+
+Why did we need to run these sorts?
+
+Now run the last lines, the htseq commands.
+
+## Saturation
+Why is this useful?
+
+Look and run saturation.sh
+
+What do we see in the images?
+
+## Cufflinks
+
+## DGE
+Run edger
+Run DESeq
+
+
 
 ## Aknowledgments
 The format for this tutorial has been inspired from Mar Gonzalez Porta of Embl-EBI, who I would like to thank and acknowledge.
