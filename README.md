@@ -113,6 +113,9 @@ What do we see in the images?
 ## Cufflinks
 
 ## DGE
+A good paper that explains the various methods can be found here:
+Dillies, M.-A., Rau, A., Aubert, J., Hennequet-Antier, C., Jeanmougin, M., Servant, N., Keime, C., et al. (2013). A comprehensive evaluation of normalization methods for Illumina high-throughput RNA sequencing data analysis. Briefings in bioinformatics, 14(6), 671–83. doi:10.1093/bib/bbs046
+
 Run edger
 Run DESeq
 
