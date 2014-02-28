@@ -51,7 +51,7 @@ zcat raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair2.fastq.gz | head -n4
 ```
 From the second set of commands (the head), what was special about the output?
 Why was it like that?
-[Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_fastq.ex1.md)
+[Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_fastq.ex1.md)
 
 You could also just count the reads
 ```
@@ -61,7 +61,7 @@ Why shouldn't you just do
 ```
 zgrep -c "^@" raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz
 ```
-[Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/_fastq.ex2.md)
+[Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/_fastq.ex2.md)
 
 
 ### Quality
@@ -78,7 +78,7 @@ java -Xmx1G -jar ~/bvatools-dev.jar readsqc --read1 raw_reads/NA12878/runERR_1/N
 Copy the images from the ```originalQC``` folder to your desktop and open the images.
 
 What stands out in the graphs?
-[Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_fastqQC.ex1.md)
+[Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_fastqQC.ex1.md)
 
 All the generated graphics have their uses. This being said 2 of them are particularly useful to get an overal picture of how good or bad a run went. These are the Quality box plots and the nucleotide content graphs.
 
@@ -92,7 +92,7 @@ The formula outputs an integer that is encoded using an [ASCII](http://en.wikipe
 Older illumina runs were using phred+64 instead of phred+33 to encode their fastq files.
 
 In the SRR dataset we also see some adapters.
-Why does this happen [Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_fastqQC.ex2.md)
+Why does this happen [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_fastqQC.ex2.md)
 
 
 ### Trimming
@@ -109,7 +109,7 @@ We can look at the adapters
 ```
 cat adapters.fa
 ```
-Why are there 2 different ones? [Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_trim.ex1.md)
+Why are there 2 different ones? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_trim.ex1.md)
 
 
 Let's try removing them and see what happens.
@@ -124,7 +124,7 @@ java -XX:ParallelGCThreads=1 -Xmx2G -cp $TRIMMOMATIC_JAR org.usadellab.trimmomat
 cat reads/NA12878/runERR_1/NA12878.ERR.trim.out reads/NA12878/runSRR_1/NA12878.SRR.trim.out
 ```
 
-What does Trimmomatic says it did? [Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_trim.ex2.md)
+What does Trimmomatic says it did? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_trim.ex2.md)
 
 Let's look at the graphs now
 
@@ -134,13 +134,13 @@ java -Xmx1G -jar ~/bvatools-dev.jar readsqc --read1 reads/NA12878/runERR_1/NA128
 java -Xmx1G -jar ~/bvatools-dev.jar readsqc --read1 reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz --read2 reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz --threads 2 --regionName SRR --output postTrimQC/
 ```
 
-How does it look now? [Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_trim.ex3.md)
+How does it look now? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_trim.ex3.md)
 
 
 # Alignment
 The data is now cleaned up of artefacts we can align each lane seperatly.
 
-Why should this be done seperatly? [Solution](https://raw.github.com/lletourn/Workshops/kyoto2014/blob/solutions/_aln.ex1.md)
+Why should this be done seperatly? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex1.md)
 
 ```
 ```
