@@ -138,84 +138,137 @@ How does it look now? [Solution](https://github.com/lletourn/Workshops/blob/kyot
 
 
 # Alignment
-The data is now cleaned up of artefacts we can align each lane seperatly.
+The raw reads are now cleaned up of artefacts we can align each lane separatly.
 
-Why should this be done seperatly? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex1.md)
+Why should this be done separatly? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex1.md)
 
 ```
+mkdir -p alignment/NA12878/runERR_1
+mkdir -p alignment/NA12878/runSRR_1
+
+bwa mem -M -t 2 -R '@RG\tID:ERR_ERR_1\tSM:NA12878\tLB:ERR\tPU:runERR_1\tCN:Broad Institute' references/b37.fasta reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair1.fastq.gz reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair2.fastq.gz | java -Djava.io.tmpdir=/lb/scratch/ -XX:ParallelGCThreads=1 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar  INPUT=/dev/stdin CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate OUTPUT=alignment/NA12878/runERR_1/NA12878.ERR.sorted.bam MAX_RECORDS_IN_RAM=500000
+
+bwa mem -M -t 2 -R '@RG\tID:SRR_SRR_1\tSM:NA12878\tLB:SRR\tPU:runSRR_1\tCN:Broad Institute' references/b37.fasta reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz | java -Djava.io.tmpdir=/lb/scratch/ -XX:ParallelGCThreads=1 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar  INPUT=/dev/stdin CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate OUTPUT=alignment/NA12878/runSRR_1/NA12878.SRR.sorted.bam MAX_RECORDS_IN_RAM=500000
 ```
 
-## TopHat
-Look into align.sh
+Why is it important to set Read Group information? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex2.md)
 
-If we would have aligned to a transcriptome what would be different?
+The details of the fields can be found in the SAM/BAM specifications [Here](http://samtools.sourceforge.net/SAM1.pdf)
+For most cases, only the sample name, platform unit and library one are important. 
 
-## MarkDup
-Look into mdup.sh
-Run all the lines but the last.
+Why did we pipe the output of one to the other? Could we have done it differently? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex3.md)
 
-Why markdup?
+We will explore the generated BAM latter.
 
-Should we?
+# Lane merging
+We now have alignments for each of the sequences lanes. This is not practical in it's current form. What we wan't to do now
+is merge the results into one BAM.
 
-Look in the metrics file. Are there any dups?
-Does it fit with the QC?
+Since we identified the reads in the BAM with read groups, even after the merging, we can still identify the origin of each read.
 
-Let's try the last command we skipped from mdup.sh
+```
+java -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true INPUT=alignment/NA12878/runERR_1/NA12878.ERR.sorted.bam INPUT=alignment/NA12878/runSRR_1/NA12878.SRR.sorted.bam  OUTPUT=alignment/NA12878/NA12878.sorted.bam MAX_RECORDS_IN_RAM=250000 
+``` 
+
+You should now have one BAM containing all your data.
+Let's double check
+```
+ls -l alignment/NA12878/
+samtools view -H alignment/NA12878/NA12878.sorted.bam | grep "^@RG"
+
+```
+
+You should have your 2 read group entries.
+Why did we use the ```-H``` switch? Try without. What happens? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_merge.ex1.md)
+
+# Cleaning up alignments
+We started by cleaning up the raw reads. Now we need to fix some alignments.
+
+The first step for this is to realign around indels and snp dense regions.
+The Genome Analysis toolkit has a tool for this called IndelRealigner.
+
+It basically runs in 2 steps
+1- Find the targets
+2- Realign them.
+
+```
+java -Xmx2G  -jar ${GATK_JAR} -T RealignerTargetCreator -R references/b37.fasta -o alignment/NA12878/realign.intervals -I alignment/NA12878/NA12878.sorted.bam -L 1
+
+java -Xmx2G -jar ${GATK_JAR} -T IndelRealigner -R references/b37.fasta -targetIntervals alignment/NA12878/realign.intervals -o alignment/NA12878/NA12878.realigned.sorted.bam -I alignment/NA12878/NA12878.sorted.bam
+
+```
+
+How could we make this go faster? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_realign.ex1.md)
+How many regions did it think needed cleaning? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_realign.ex2.md)
+
+Indel Realigner also makes sure the called deletions are left aligned when there is a microsat of homopolmer.
+```
+This
+ATCGAAAA-TCG
+into
+ATCG-AAAATCG
+
+or
+ATCGATATATATA--TCG
+into
+ATCG--ATATATATATCG
+```
+
+This makes it easier for down stream tools.
+
+# FixMates
+This step shouldn't be necessary...but it is.
+
+This goes through the BAM file and find entries which don't have their mate information written properly.
+
+This used to be a problem in the GATKs realigner, but they fixed it. It shouldn't be a problem with aligners like BWA, but there are always corner cases that create
+one-off corrdinates and such.
+
+This happened a lot with bwa backtrack. This happens less with bwa mem, but it still happens none the less.
+
+```
+java -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true SORT_ORDER=coordinate INPUT=alignment/NA12878/NA12878.realigned.sorted.bam OUTPUT=alignment/NA12878/NA12878.matefixed.sorted.bam MAX_RECORDS_IN_RAM=500000
+```
+
+# Mark duplicates
+
+# Recalibration
+
+# Extract Metrics
+Once your whole bam is generated, it's always a good thing to check the data again to see if everything makes sens.
+
+## Compute coverage
+If you have data from a capture kit, you should see how well your targets worked
+
+## Check flagstat
+
+## Insert Size
+
+# Variant calling
+
+## Samtools
+
+## GATK Unified Genotyper
+
+## GATK Haplotyper
 
 ## Visualisation
-We'll need a coverage marker to find our way.
+Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
 
 Try this:
 
 ```
-module load mugqic/igvtools/2.3.14
-igvtools count -f min,max,mean alignment/rRNA_Dep_Brain_A/rRNA_Dep_Brain_A.merged.mdup.bam alignment/rRNA_Dep_Brain_A/rRNA_Dep_Brain_A.merged.mdup.bam.tdf b37
+igvtools count -f min,max,mean alignment/NA12878/NA12878.sorted.dup.recal.bam alignment/NA12878/NA12878.sorted.dup.recal.bam.tdf b37
 ```
 
-### IGV
+# IGV
 You can get IGV [here](http://www.broadinstitute.org/software/igv/download)
 
 Open it and choose b37 as the genome
 
-Open your bams, the tdf should load.
+Open your bams, the tdf we just generated should load.
 
 What do you see...
-
-## RNA QC
-Ok the command should be done now.
-
-## Counting reads
-IGV is not meant for this, but this is needed to understand DGE.
-
-We'll use [*htseq*](http://www-huber.embl.de/users/anders/HTSeq/doc/count.html)
-
-But it requires special ordering.
-
-Look at count.sh
-
-run the first lines until htseq.
-
-Why did we need to run these sorts?
-
-Now run the last lines, the htseq commands.
-
-## Saturation
-Why is this useful?
-
-Look and run saturation.sh
-
-What do we see in the images?
-
-## Cufflinks
-
-## DGE
-A good paper that explains the various methods can be found here:
-Dillies, M.-A., Rau, A., Aubert, J., Hennequet-Antier, C., Jeanmougin, M., Servant, N., Keime, C., et al. (2013). A comprehensive evaluation of normalization methods for Illumina high-throughput RNA sequencing data analysis. Briefings in bioinformatics, 14(6), 671–83. doi:10.1093/bib/bbs046
-
-Run edger
-Run DESeq
-
 
 
 ## Aknowledgments
