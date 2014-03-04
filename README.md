@@ -146,9 +146,9 @@ Why should this be done separatly? [Solution](https://github.com/lletourn/Worksh
 mkdir -p alignment/NA12878/runERR_1
 mkdir -p alignment/NA12878/runSRR_1
 
-bwa mem -M -t 2 -R '@RG\tID:ERR_ERR_1\tSM:NA12878\tLB:ERR\tPU:runERR_1\tCN:Broad Institute' references/b37.fasta reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair1.fastq.gz reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair2.fastq.gz | java -Djava.io.tmpdir=/lb/scratch/ -XX:ParallelGCThreads=1 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar  INPUT=/dev/stdin CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate OUTPUT=alignment/NA12878/runERR_1/NA12878.ERR.sorted.bam MAX_RECORDS_IN_RAM=500000
+bwa mem -M -t 2 -R '@RG\tID:ERR_ERR_1\tSM:NA12878\tLB:ERR\tPU:runERR_1\tCN:Broad Institute\tPL:ILLUMINA' references/b37.fasta reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair1.fastq.gz reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair2.fastq.gz | java -Djava.io.tmpdir=/lb/scratch/ -XX:ParallelGCThreads=1 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar  INPUT=/dev/stdin CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate OUTPUT=alignment/NA12878/runERR_1/NA12878.ERR.sorted.bam MAX_RECORDS_IN_RAM=500000
 
-bwa mem -M -t 2 -R '@RG\tID:SRR_SRR_1\tSM:NA12878\tLB:SRR\tPU:runSRR_1\tCN:Broad Institute' references/b37.fasta reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz | java -Djava.io.tmpdir=/lb/scratch/ -XX:ParallelGCThreads=1 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar  INPUT=/dev/stdin CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate OUTPUT=alignment/NA12878/runSRR_1/NA12878.SRR.sorted.bam MAX_RECORDS_IN_RAM=500000
+bwa mem -M -t 2 -R '@RG\tID:SRR_SRR_1\tSM:NA12878\tLB:SRR\tPU:runSRR_1\tCN:Broad Institute\tPL:ILLUMINA' references/b37.fasta reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz | java -Djava.io.tmpdir=/lb/scratch/ -XX:ParallelGCThreads=1 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar  INPUT=/dev/stdin CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate OUTPUT=alignment/NA12878/runSRR_1/NA12878.SRR.sorted.bam MAX_RECORDS_IN_RAM=500000
 ```
 
 Why is it important to set Read Group information? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex2.md)
@@ -231,8 +231,47 @@ java -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar VALIDATION_STRINGENCY=SIL
 ```
 
 # Mark duplicates
+As the step says, this is to mark duplicate reads.
+What are duplicate reads? What are they caused by? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex1.md)
+What are the ways to detect them? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex2.md)
+
+Here we will use picards approach:
+```
+java -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar REMOVE_DUPLICATES=false CREATE_MD5_FILE=true VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true INPUT=alignment/NA12878/NA12878.matefixed.sorted.bam OUTPUT=alignment/NA12878/NA12878.sorted.dup.bam METRICS_FILE=alignment/NA12878/NA12878.sorted.dup.metrics
+```
+
+We can look in the metrics output to see what happened.
+We can see that it computed seperate measures for each library.
+Why is this important to do and not combine everything? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex3.md)
+
+How many duplicates were there? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex4.md)
+
+This is on the high side, usually or rather, now since this is old data, this should be <2% for 2-3 lanes.
 
 # Recalibration
+This is the last BAM cleaning up step.
+
+The goal for this step is to try to recalibrate base quality scores. The vendors tend to inflate the values of the bases in the reads.
+Also, this step tries to lower the scores of some biased motifs for some technologies.
+
+It runs in 2 steps, 
+1- Build covariates based on context and known snp sites
+2- Correct the reads based on these metrics
+
+```
+java -Xmx2G -jar ${GATK_JAR} -T BaseRecalibrator -nct 2 -R references/b37.fasta -knownSites references/dbSnp-137.vcf.gz -o alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp -I alignment/NA12878/NA12878.sorted.dup.bam
+
+java -Xmx2G -jar ${GATK_JAR} -T PrintReads -nct 12 -R references/b37.fasta -BQSR alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp -o alignment/NA12878/NA12878.sorted.dup.recal.bam -I alignment/NA12878/NA12878.sorted.dup.bam
+```
+
+Just to see how things change let's make GATK recalibrate after a first pass
+```
+java -Xmx2G -jar ${GATK_JAR} -T BaseRecalibrator -nct 2 -R references/b37.fasta -knownSites references/dbSnp-137.vcf.gz -o alignment/NA12878/NA12878.sorted.dup.recalibration_report.seconnd.grp -I alignment/NA12878/NA12878.sorted.dup.bam -BQSR alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp
+
+java -Xmx2G -jar ${GATK_JAR} -T AnalyzeCovariates -R references/b37.fasta -before alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp -after alignment/NA12878/NA12878.sorted.dup.recalibration_report.seconnd.grp -csv BQSR.csv -plots BQSR.pdf
+```
+
+The graphs don't mean much because we downsampled the data quite a bit. With a true whole genome or whole exome dataset we can see a bigger effect.
 
 # Extract Metrics
 Once your whole bam is generated, it's always a good thing to check the data again to see if everything makes sens.
