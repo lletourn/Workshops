@@ -181,6 +181,59 @@ samtools view -H alignment/NA12878/NA12878.sorted.bam | grep "^@RG"
 You should have your 2 read group entries.
 Why did we use the ```-H``` switch? Try without. What happens? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_merge.ex1.md)
 
+## SAM/BAM
+Let's spend some time to explore bam files.
+
+try
+```
+samtools view alignment/NA12878/NA12878.sorted.bam | head -n2
+```
+
+Here you have examples of alignment results.
+A full description of the flags can be found in the SAM specification
+http://samtools.sourceforge.net/SAM1.pdf
+
+Try using picards explain flag site to understand what is going on with your reads
+http://picard.sourceforge.net/explain-flags.html
+
+The flag is the 2nd column.
+
+What do the flags of the first 2 reads mean? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_sambam.ex1.md)
+
+Let's take the 2nd one, the one that is in proper pair, and find it's pair.
+
+try
+```
+samtools view alignment/NA12878/NA12878.sorted.bam | grep ERR001733.2317763
+
+```
+
+Why did searching one name find both reads? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_sambam.ex2.md)
+
+You can use samtools to filter reads as well.
+
+```
+# Say you want to count the *un-aligned* reads you can use
+samtools view -c -f4 alignment/NA12878/NA12878.sorted.bam
+
+# Or you want to count the *aligned* reads you can use
+samtools view -c -F4 alignment/NA12878/NA12878.sorted.bam
+
+```
+How many reads mapped and unmapped were there? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_sambam.ex3.md)
+
+
+Another useful bit of information in the SAM is the CIGAR string.
+It's the 6th column in the file. This column explains how the alignment was achieved.
+M == base aligns *but doesn't have to be a match*. A SNP will have an M even if it disagrees with the reference.
+I == Insertion
+D == Deletion
+S == soft-clips. These are handy to find un removed adapters, viral insertions, etc.
+
+An in depth explanation of the CIGAR can be found [here](http://genome.sph.umich.edu/wiki/SAM)
+The exact details of the cigar string can be found in the SAM spec as well.
+Another good site
+
 # Cleaning up alignments
 We started by cleaning up the raw reads. Now we need to fix some alignments.
 
@@ -279,17 +332,92 @@ Once your whole bam is generated, it's always a good thing to check the data aga
 ## Compute coverage
 If you have data from a capture kit, you should see how well your targets worked
 
-## Check flagstat
+Both GATK and BVATools have depth of coverage tools. We wrote our own in BVAtools because
+- GATK was deprecating theirs, but they changed their mind
+- GATK's is very slow
+- We were missing come output that we wanted from the GATK's one (GC per interval, valid pairs, etc)
+
+Here we'll use the GATK one
+```
+java  -Xmx2G -jar ${GATK_JAR} -T DepthOfCoverage --omitDepthOutputAtEachBase --summaryCoverageThreshold 10 --summaryCoverageThreshold 25 --summaryCoverageThreshold 50  --summaryCoverageThreshold 100 --start 1 --stop 500 --nBins 499 -dt NONE -R references/b37.fasta -o alignment/NA12878/NA12878.sorted.dup.recal.coverage -I alignment/NA12878/NA12878.sorted.dup.recal.bam -L 1:47000000-47171000
+
+# Look at the coverage
+less -S alignment/NA12878/NA12878.sorted.dup.recal.coverage.sample_interval_summary
+```
+
+Coverage is the expected ~30x. 
+summaryCoverageThreshold is a usefull function to see if your coverage is uniform.
+Another way is to compare the mean to the median. If both are almost equal, your coverage is pretty flat. If both are quite different
+That means something is wrong in your coverage. A mix of WGS and WES would show very different mean and median values.
+
 
 ## Insert Size
+```
+java -Xmx2G -jar ${PICARD_HOME}/CollectInsertSizeMetrics.jar VALIDATION_STRINGENCY=SILENT REFERENCE_SEQUENCE=references/b37.fasta INPUT=alignment/NA12878/NA12878.sorted.dup.recal.bam OUTPUT=alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.tsv HISTOGRAM_FILE=alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.histo.pdf METRIC_ACCUMULATION_LEVEL=LIBRARY
+
+#look at the output
+less -S alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.tsv
+```
+
+There is something interesting going on with our library ERR.
+From the pdf or the tab seperated file, can you tell what it is? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_insert.ex1.md)
+
+## Alignment metrics
+For the alignment metrics, we used to use ```samtools flagstat``` but with bwa mem since some reads get broken into pieces, the numbers are a bit confusing.
+You can try it if you want.
+
+We prefer the Picard way of computing metrics
+
+```
+java -Xmx2G -jar ${PICARD_HOME}/CollectAlignmentSummaryMetrics.jar VALIDATION_STRINGENCY=SILENT REFERENCE_SEQUENCE=references/b37.fasta INPUT=alignment/NA12878/NA12878.sorted.dup.recal.bam OUTPUT=alignment/NA12878/NA12878.sorted.dup.recal.metric.alignment.tsv  METRIC_ACCUMULATION_LEVEL=LIBRARY
+
+# explore the results
+less -S alignment/NA12878/NA12878.sorted.dup.recal.metric.alignment.tsv
+
+```
+
 
 # Variant calling
+Here we will try 3 variant callers.
+I won't go into the details of finding which variant is good or bad since this will be your next workshop.
+Here we will just call and view the variants.
 
 ## Samtools
+```
+samtools mpileup -L 1000 -B -q 1 -D -S -g -f references/b37.fasta -r 1:47000000-47171000 alignment/NA12878/NA12878.sorted.dup.recal.bam | bcftools view -vcg - > variants/mpileup.vcf
+```
 
 ## GATK Unified Genotyper
+```
+java -Xmx2G -jar ${GATK_JAR} -T UnifiedGenotyper -R references/b37.fasta -I alignment/NA12878/NA12878.sorted.dup.recal.bam -o variants/ug.vcf -dt none -L 1:46000000-47600000
+```
 
 ## GATK Haplotyper
+```
+java -Xmx2G -jar ${GATK_JAR} -T HaplotypeCaller -R references/b37.fasta -I alignment/NA12878/NA12878.sorted.dup.recal.bam -o variants/haplo.vcf -dt none -L 1:46000000-47600000
+```
+
+Now we have variants from all three methods. Let's compress and index the vcfs for futur visualisation.
+```
+for i in variants/*.vcf;do bgzip -c $i > $i.gz ; tabix -p vcf $i.gz;done
+```
+
+Let's look at a compressed vcf.
+```
+less -S variants/mpileup.vcf
+```
+
+Details on the spec can be found here:
+http://vcftools.sourceforge.net/specs.html
+
+Fields vary from caller to caller. Some values are more constant.
+The ref vs alt alleles, variant quality (QUAL column) and the per-sample genotype (GT) values are almost always there.
+
+# Annotations
+Usually we would annotate the vcf with a functional effect prediction tool at this point.
+We typically use snpEff but many use annovar and VEP as well.
+
+For now we will skip this step since you will be working with these annotations in your next workshop.
 
 ## Visualisation
 Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
@@ -305,7 +433,8 @@ You can get IGV [here](http://www.broadinstitute.org/software/igv/download)
 
 Open it and choose b37 as the genome
 
-Open your bams, the tdf we just generated should load.
+Open your BAM file, the tdf we just generated should load.
+Load your vcfs as well.
 
 What do you see...
 
