@@ -85,7 +85,7 @@ All the generated graphics have their uses. This being said 2 of them are partic
 The Box plot shows the quality distribution of your data. In this case the reasons there are spikes and jumps in quality and length is because there are actually different libraries pooled together in the 2 fastq files. The sequencing lengths vary between 36,50,76 bp read lengths. The Graph goes > 100 because both ends are appended one after the other.
 
 The quality of a base is computated using the Phread quality score.
-![Phred quality score formula](../img/phredFormula.png)
+![Phred quality score formula](img/phredFormula.png)
 
 The formula outputs an integer that is encoded using an [ASCII](http://en.wikipedia.org/wiki/ASCII) table. The way the lookup is done is by taking the the phred score adding 33 and using this number as a lookup in the table. The Wikipedia entry for the [FASTQ format](http://en.wikipedia.org/wiki/FASTQ_format) has a summary of the varying values.
 
