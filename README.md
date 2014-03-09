@@ -18,8 +18,11 @@ The initial structure of your folders should look like this:
     `-- NA12878              # One sample directory
         |-- runERR_1         # Lane directory by run number. Contains the fastqs
         `-- runSRR_1         # Lane directory by run number. Contains the fastqs
-`-- LabCourseNGS.csv         # sample sheet
+`-- project.nanuq.csv        # sample sheet
 ```
+
+### Cheat sheets
+* [Unix comand line cheat sheet](http://sites.tufts.edu/cbi/files/2013/01/linux_cheat_sheet.pdf)
 
 ### Environment setup
 ```
@@ -31,9 +34,12 @@ export PATH=$PATH:<TO BE DETERMINED>
 * Standalone tools:
   * [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
   * [BVATools](https://bitbucket.org/mugqic/bvatools/downloads)
-  * [samtools](http://sourceforge.net/projects/samtools/)
+  * [SAMTools](http://sourceforge.net/projects/samtools/)
   * [IGV](http://www.broadinstitute.org/software/igv/download)
   * [BWA](http://bio-bwa.sourceforge.net/)
+  * [Genome Analysis Toolkit](http://www.broadinstitute.org/gatk/)
+  * [Picard](http://picard.sourceforge.net/)
+  * [SnpEff](http://snpeff.sourceforge.net/)
 
 
 # First data glance
@@ -389,7 +395,7 @@ samtools mpileup -L 1000 -B -q 1 -D -S -g -f references/b37.fasta -r 1:47000000-
 
 ## GATK Unified Genotyper
 ```
-java -Xmx2G -jar ${GATK_JAR} -T UnifiedGenotyper -R references/b37.fasta -I alignment/NA12878/NA12878.sorted.dup.recal.bam -o variants/ug.vcf -dt none -L 1:46000000-47600000
+java -Xmx2G -jar ${GATK_JAR} -T UnifiedGenotyper -R references/b37.fasta -I alignment/NA12878/NA12878.sorted.dup.recal.bam -o variants/ug.vcf --genotype_likelihoods_model BOTH  -dt none -L 1:46000000-47600000
 ```
 
 ## GATK Haplotyper
@@ -414,10 +420,20 @@ Fields vary from caller to caller. Some values are more constant.
 The ref vs alt alleles, variant quality (QUAL column) and the per-sample genotype (GT) values are almost always there.
 
 # Annotations
-Usually we would annotate the vcf with a functional effect prediction tool at this point.
 We typically use snpEff but many use annovar and VEP as well.
 
-For now we will skip this step since you will be working with these annotations in your next workshop.
+Let's run snpEff
+```
+java  -Xmx4G -jar ${SNPEFF_HOME}/snpEff.jar eff -c ${SNPEFF_HOME}/snpEff.config -o vcf -i vcf -stats variants/mpileup.snpeff.vcf.stats.html GRCh37.74 variants/mpileup.vcf > variants/mpileup.snpeff.vcf
+
+less -S variants/mpileup.snpeff.vcf
+```
+We can see in the vcf that snpEff added a few sections. These are hard to decipher directly from the VCF other tools or scripts,
+need to be used to make sens of this.
+
+For now we will skip this step since you will be working with gene annotations in your next workshop.
+
+Take a look at the HTML stats file snpEff created. It contains some metrics on the variants it analysed.
 
 ## Visualisation
 Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
@@ -436,7 +452,10 @@ Open it and choose b37 as the genome
 Open your BAM file, the tdf we just generated should load.
 Load your vcfs as well.
 
-What do you see...
+Find an indel. What's different between the snp callers? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_vis.ex1.md)
+Go to 1:47050562-47051207 what is interesting here?  [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_vis.ex2.md)
+
+Look around...
 
 
 ## Aknowledgments
