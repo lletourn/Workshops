@@ -25,7 +25,7 @@ The initial structure of your folders should look like this:
 
 ### Environment setup
 ```
-export PATH=$PATH:/home/Louis/tools/tabix-0.2.6/
+export PATH=$PATH:/home/Louis/tools/tabix-0.2.6/:/home/Louis/tools/igvtools_2.3.31/
 export PICARD_HOME=/usr/local/bin
 export SNPEFF_HOME=/home/Louis/tools/snpEff_v3_5_core/snpEff
 export GATK_JAR=/usr/local/bin/GenomeAnalysisTK.jar
@@ -601,7 +601,11 @@ Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
 Try this:
 
 ```
-igvtools count -f min,max,mean alignment/NA12878/NA12878.sorted.dup.recal.bam alignment/NA12878/NA12878.sorted.dup.recal.bam.tdf b37
+igvtools count \
+  -f min,max,mean \
+  alignment/NA12878/NA12878.sorted.dup.recal.bam \
+  alignment/NA12878/NA12878.sorted.dup.recal.bam.tdf \
+  b37
 ```
 
 # IGV
