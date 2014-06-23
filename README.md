@@ -99,6 +99,7 @@ java -Xmx1G -jar ${BVATOOLS_JAR} readsqc --quality 64 \
   --read1 raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz \
   --read2 raw_reads/normal/runD0YR4ACXX_1/normal.64.pair2.fastq.gz \
   --threads 2 --regionName normalD0YR4ACXX_1 --output originalQC/
+```
 
 Open the images.
 
