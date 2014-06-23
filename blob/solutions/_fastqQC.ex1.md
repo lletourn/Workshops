@@ -1,3 +1,3 @@
-- Quality drops towards the ends
-- There seem to be spikes in the data, length and quality
-- The SRR data set has some adapters in it
+- Quality slightly drops towards the ends
+- The PCR duplication rate is very low (good thing)
+- There is not a lot of adapter in the data (good thing)

@@ -1,2 +1,2 @@
-SRR 3%
-ERR 7%
+Normal 2.7%
+Tumor 1.6%
