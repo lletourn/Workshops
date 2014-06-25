@@ -409,43 +409,49 @@ It runs in 2 steps,
 2- Correct the reads based on these metrics
 
 ```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T BaseRecalibrator \
-  -nct 2 \
-  -R ${REF}/b37.fasta \
-  -knownSites ${REF}/dbSnp-137.vcf.gz \
-  -L 1:47000000-47171000 \
-  -o alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp \
-  -I alignment/NA12878/NA12878.sorted.dup.bam
+for i in normal tumor
+do
+  java -Xmx2G -jar ${GATK_JAR} \
+    -T BaseRecalibrator \
+    -nct 2 \
+    -R ${REF}/b37.fasta \
+    -knownSites ${REF}/dbSnp-137.vcf.gz \
+    -L 19:50500000-52502000 \
+    -o alignment/${i}/${i}.sorted.dup.recalibration_report.grp \
+    -I alignment/${i}/${i}.sorted.dup.bam
 
-java -Xmx2G -jar ${GATK_JAR} \
-  -T PrintReads \
-  -nct 2 \
-  -R ${REF}/b37.fasta \
-  -BQSR alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp \
-  -o alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -I alignment/NA12878/NA12878.sorted.dup.bam
+    java -Xmx2G -jar ${GATK_JAR} \
+      -T PrintReads \
+      -nct 2 \
+      -R ${REF}/b37.fasta \
+      -BQSR alignment/${i}/${i}.sorted.dup.recalibration_report.grp \
+      -o alignment/${i}/${i}.sorted.dup.recal.bam \
+      -I alignment/${i}/${i}.sorted.dup.bam
+done
 ```
 
 Just to see how things change let's make GATK recalibrate after a first pass
 ```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T BaseRecalibrator \
-  -nct 2 \
-  -R ${REF}/b37.fasta \
-  -knownSites ${REF}/dbSnp-137.vcf.gz \
-  -L 1:47000000-47171000 \
-  -o alignment/NA12878/NA12878.sorted.dup.recalibration_report.seconnd.grp \
-  -I alignment/NA12878/NA12878.sorted.dup.bam \
-  -BQSR alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp
+for i in normal tumor
+do
+  java -Xmx2G -jar ${GATK_JAR} \
+    -T BaseRecalibrator \
+    -nct 2 \
+    -R ${REF}/b37.fasta \
+    -knownSites ${REF}/dbSnp-137.vcf.gz \
+    -L 19:50500000-52502000 \
+    -o alignment/${i}/${i}.sorted.dup.recalibration_report.seconnd.grp \
+    -I alignment/${i}/${i}.sorted.dup.bam \
+    -BQSR alignment/${i}/${i}.sorted.dup.recalibration_report.grp
 
-java -Xmx2G -jar ${GATK_JAR} \
-  -T AnalyzeCovariates \
-  -R ${REF}/b37.fasta \
-  -before alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp \
-  -after alignment/NA12878/NA12878.sorted.dup.recalibration_report.seconnd.grp \
-  -csv BQSR.csv \
-  -plots BQSR.pdf
+  java -Xmx2G -jar ${GATK_JAR} \
+    -T AnalyzeCovariates \
+    -R ${REF}/b37.fasta \
+    -before alignment/${i}/${i}.sorted.dup.recalibration_report.grp \
+    -after alignment/${i}/${i}.sorted.dup.recalibration_report.seconnd.grp \
+    -csv alignment/${i}/BQSR.${i}.csv \
+    -plots alignment/${i}/BQSR.${i}.pdf
+done
 ```
 
 The graphs don't mean much because we downsampled the data quite a bit. With a true whole genome or whole exome dataset we can see a bigger effect.
@@ -459,48 +465,55 @@ If you have data from a capture kit, you should see how well your targets worked
 Both GATK and BVATools have depth of coverage tools. We wrote our own in BVAtools because
 - GATK was deprecating theirs, but they changed their mind
 - GATK's is very slow
-- We were missing come output that we wanted from the GATK's one (GC per interval, valid pairs, etc)
+- We were missing some output that we wanted from the GATK's one (GC per interval, valid pairs, etc)
 
 Here we'll use the GATK one
+
 ```
-java  -Xmx2G -jar ${GATK_JAR} \
-  -T DepthOfCoverage \
-  --omitDepthOutputAtEachBase \
-  --summaryCoverageThreshold 10 \
-  --summaryCoverageThreshold 25 \
-  --summaryCoverageThreshold 50 \
-  --summaryCoverageThreshold 100 \
-  --start 1 --stop 500 --nBins 499 -dt NONE \
-  -R ${REF}/b37.fasta \
-  -o alignment/NA12878/NA12878.sorted.dup.recal.coverage \
-  -I alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -L 1:47000000-47171000
+for i in normal tumor
+do
+  java  -Xmx2G -jar ${GATK_JAR} \
+    -T DepthOfCoverage \
+    --omitDepthOutputAtEachBase \
+    --summaryCoverageThreshold 10 \
+    --summaryCoverageThreshold 25 \
+    --summaryCoverageThreshold 50 \
+    --summaryCoverageThreshold 100 \
+    --start 1 --stop 500 --nBins 499 -dt NONE \
+    -R ${REF}/b37.fasta \
+    -o alignment/${i}/${i}.sorted.dup.recal.coverage \
+    -I alignment/${i}/${i}.sorted.dup.recal.bam \
+    -L 19:50500000-52502000 &
+done
+wait
 
 # Look at the coverage
-less -S alignment/NA12878/NA12878.sorted.dup.recal.coverage.sample_interval_summary
+less -S alignment/normal/normal.sorted.dup.recal.coverage.sample_interval_summary
+less -S alignment/tumor/tumor.sorted.dup.recal.coverage.sample_interval_summary
 ```
 
-Coverage is the expected ~30x. 
+Coverage is the expected ~70-110x. 
 summaryCoverageThreshold is a usefull function to see if your coverage is uniform.
 Another way is to compare the mean to the median. If both are almost equal, your coverage is pretty flat. If both are quite different
 That means something is wrong in your coverage. A mix of WGS and WES would show very different mean and median values.
 
 ## Insert Size
 ```
-java -Xmx2G -jar ${PICARD_HOME}/CollectInsertSizeMetrics.jar \
-  VALIDATION_STRINGENCY=SILENT \
-  REFERENCE_SEQUENCE=${REF}/b37.fasta \
-  INPUT=alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  OUTPUT=alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.tsv \
-  HISTOGRAM_FILE=alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.histo.pdf \
-  METRIC_ACCUMULATION_LEVEL=LIBRARY
+for i in normal tumor
+do
+  java -Xmx2G -jar ${PICARD_HOME}/CollectInsertSizeMetrics.jar \
+    VALIDATION_STRINGENCY=SILENT \
+    REFERENCE_SEQUENCE=${REF}/b37.fasta \
+    INPUT=alignment/${i}/${i}.sorted.dup.recal.bam \
+    OUTPUT=alignment/${i}/${i}.sorted.dup.recal.metric.insertSize.tsv \
+    HISTOGRAM_FILE=alignment/${i}/${i}.sorted.dup.recal.metric.insertSize.histo.pdf \
+    METRIC_ACCUMULATION_LEVEL=LIBRARY
+done
 
 #look at the output
-less -S alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.tsv
+less -S alignment/normal/normal.sorted.dup.recal.metric.insertSize.tsv
+less -S alignment/tumor/tumor.sorted.dup.recal.metric.insertSize.tsv
 ```
-
-There is something interesting going on with our library ERR.
-From the pdf or the tab seperated file, can you tell what it is? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/blob/solutions/_insert.ex1.md)
 
 ## Alignment metrics
 For the alignment metrics, we used to use ```samtools flagstat``` but with bwa mem since some reads get broken into pieces, the numbers are a bit confusing.
@@ -509,65 +522,95 @@ You can try it if you want.
 We prefer the Picard way of computing metrics
 
 ```
-java -Xmx2G -jar ${PICARD_HOME}/CollectAlignmentSummaryMetrics.jar \
-  VALIDATION_STRINGENCY=SILENT \
-  REFERENCE_SEQUENCE=${REF}/b37.fasta \
-  INPUT=alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  OUTPUT=alignment/NA12878/NA12878.sorted.dup.recal.metric.alignment.tsv \
-  METRIC_ACCUMULATION_LEVEL=LIBRARY
+for i in normal tumor
+do
+  java -Xmx2G -jar ${PICARD_HOME}/CollectAlignmentSummaryMetrics.jar \
+    VALIDATION_STRINGENCY=SILENT \
+    REFERENCE_SEQUENCE=${REF}/b37.fasta \
+    INPUT=alignment/${i}/${i}.sorted.dup.recal.bam \
+    OUTPUT=alignment/${i}/${i}.sorted.dup.recal.metric.alignment.tsv \
+    METRIC_ACCUMULATION_LEVEL=LIBRARY
+done
 
 # explore the results
-less -S alignment/NA12878/NA12878.sorted.dup.recal.metric.alignment.tsv
+less -S alignment/normal/normal.sorted.dup.recal.metric.alignment.tsv
+less -S alignment/tumor/tumor.sorted.dup.recal.metric.alignment.tsv
 
 ```
 
 
 # Variant calling
 Here we will try 3 variant callers.
-I won't go into the details of finding which variant is good or bad since this will be your next workshop.
-Here we will just call and view the variants.
+- SAMtools
+- MuTecT
+- Strelka
 
-Start with:
+Other candidates
+- Varscan 2
+- Virmid
+- Somatic sniper
+
+many, MANY others can be found here:
+https://www.biostars.org/p/19104/
+
+In our case, let's start with:
 ```
-mkdir variants
+mkdir pairedVariants
 ```
 
 ## Samtools
 ```
 samtools mpileup -L 1000 -B -q 1 -D -S -g \
   -f ${REF}/b37.fasta \
-  -r 1:47000000-47171000 \
-  alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  | bcftools view -vcg - \
-  > variants/mpileup.vcf
+  -r 19:50500000-52502000 \
+  alignment/normal/normal.sorted.dup.recal.bam \
+  alignment/tumor/tumor.sorted.dup.recal.bam \
+  | bcftools view -vcg -T pair - \
+  > pairedVariants/mpileup.vcf
 ```
 
-## GATK Unified Genotyper
+## Broad MuTecT
 ```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T UnifiedGenotyper \
+# Note MuTecT only works with Java 6, 7 will give you an error
+# if you get "Comparison method violates its general contract!
+# you used java 7"
+java6 -Xmx2G -jar ${MUTECT_JAR} \
+  -T MuTect \
   -R ${REF}/b37.fasta \
-  -I alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -o variants/ug.vcf \
-  --genotype_likelihoods_model BOTH \
-  -dt none \
-  -L 1:46000000-47600000
+  -dt NONE -baq OFF --validation_strictness LENIENT -nt 2 \
+  --dbsnp ${REF}/dbSnp-137.vcf \
+  --cosmic ${REF}/b37_cosmic_v54_120711.vcf \
+  --input_file:normal alignment/normal/normal.sorted.dup.recal.bam \
+  --input_file:tumor alignment/tumor/tumor.sorted.dup.recal.bam \
+  --out pairedVariants/mutect.call_stats.txt \
+  --coverage_file pairedVariants/mutect.wig.txt \
+  -pow pairedVariants/mutect.power \
+  -vcf pairedVariants/mutect.vcf \
+  -L 19:50500000-52502000
 ```
 
-## GATK Haplotyper
+## Illumina Strelka
 ```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T HaplotypeCaller \
-  -R ${REF}/b37.fasta \
-  -I alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -o variants/haplo.vcf \
-  -dt none \
-  -L 1:46000000-47600000
+cp $STRELKA_HOME}/etc/strelka_config_bwa_default.ini ./
+# Fix ini since we subsampled
+sed 's/isSkipDepthFilters =.*/isSkipDepthFilters = 1/g' -i strelka_config_bwa_default.ini
+
+$STRELKA_HOME}/bin/configureStrelkaWorkflow.pl \
+  --normal=alignment/normal/normal.sorted.dup.recal.bam \
+  --tumor=alignment/tumor/tumor.sorted.dup.recal.bam \
+  --ref=${REF}/b37.fasta \
+  --config=strelka_config_bwa_default.ini \
+  --output-dir=pairedVariants/strelka/
+
+  cd pairedVariants/strelka/
+  make -j4
+
+  cp pairedVariants/strelka/results/passed.somatic.snvs.vcf pairedVariants/strelka.vcf
 ```
 
 Now we have variants from all three methods. Let's compress and index the vcfs for futur visualisation.
 ```
-for i in variants/*.vcf;do bgzip -c $i > $i.gz ; tabix -p vcf $i.gz;done
+for i in pairedVariants/*.vcf;do bgzip -c $i > $i.gz ; tabix -p vcf $i.gz;done
 ```
 
 Let's look at a compressed vcf.
