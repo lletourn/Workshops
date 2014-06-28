@@ -29,17 +29,17 @@ The initial structure of your folders should look like this:
 
 ### Environment setup
 ```
-export PATH=$PATH:/home/Louis/tools/tabix-0.2.6/:/home/Louis/tools/igvtools_2.3.31/
-export PICARD_HOME=/usr/local/bin
-export SNPEFF_HOME=/home/Louis/tools/snpEff_v3_5_core/snpEff
-export GATK_JAR=/usr/local/bin/GenomeAnalysisTK.jar
-export BVATOOLS_JAR=/home/Louis/tools/bvatools-1.1/bvatools-1.1-full.jar
-export TRIMMOMATIC_JAR=/usr/local/bin/trimmomatic-0.32.jar
-export REF=/home/Louis/kyotoWorkshop/references/
+export APP_ROOT=/home/training/Applications/
+export PATH=$PATH:$APP_ROOT/bwa-0.7.9a:$APP_ROOT/tabix-0.2.6/:$APP_ROOT/IGVTools
+export PICARD_HOME=$APP_ROOT/picard-tools-1.115/
+export SNPEFF_HOME=$APP_ROOT/snpEff/
+export GATK_JAR=$APP_ROOT/gatk/GenomeAnalysisTK.jar
+export BVATOOLS_JAR=$APP_ROOT/bvatools-1.3/bvatools-1.3-full.jar
+export TRIMMOMATIC_JAR=$APP_ROOT/Trimmomatic-0.32/trimmomatic-0.32.jar
+export STRELKA_HOME=$APP_ROOT/strelka-1.0.13/
+export REF=/home/training/ebiCancerWorkshop201407/references/
 
-cd $HOME
-rsync -avP /home/Louis/cleanCopy/ $HOME/workshop/
-cd $HOME/workshop/
+cd $HOME/ebiCancerWorkshop201407
 ```
 
 ### Software requirements
@@ -94,8 +94,9 @@ Tools like FastQC and BVATools readsqc can be used to plot many metrics from the
 Let's look at the data:
 
 ```
+# Generate original QC
 mkdir originalQC/
-java -Xmx1G -jar ${BVATOOLS_JAR} readsqc --quality 64 \
+java7 -Xmx1G -jar ${BVATOOLS_JAR} readsqc --quality 64 \
   --read1 raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz \
   --read2 raw_reads/normal/runD0YR4ACXX_1/normal.64.pair2.fastq.gz \
   --threads 2 --regionName normalD0YR4ACXX_1 --output originalQC/
@@ -139,6 +140,7 @@ Why are there 2 different ones? [Solution](https://github.com/lletourn/Workshops
 
 Let's try removing them and see what happens.
 ```
+# Trim and convert data
 for file in raw_reads/*/run*_?/*.pair1.fastq.gz;
 do
   FNAME=`basename $file`;
@@ -146,7 +148,7 @@ do
   OUTPUT_DIR=`echo $DIR | sed 's/raw_reads/reads/g'`;
 
   mkdir -p $OUTPUT_DIR;
-  java -Xmx2G -cp $TRIMMOMATIC_JAR org.usadellab.trimmomatic.TrimmomaticPE -threads 2 -phred64 \
+  java7 -Xmx2G -cp $TRIMMOMATIC_JAR org.usadellab.trimmomatic.TrimmomaticPE -threads 2 -phred64 \
     $file \
     ${file%.pair1.fastq.gz}.pair2.fastq.gz \
     ${OUTPUT_DIR}/${FNAME%.64.pair1.fastq.gz}.t30l50.pair1.fastq.gz \
@@ -170,6 +172,7 @@ The raw reads are now cleaned up of artefacts we can align each lane separatly.
 Why should this be done separatly? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_aln.ex1.md)
 
 ```
+# Align data
 for file in reads/*/run*_?/*.pair1.fastq.gz;
 do
   FNAME=`basename $file`;
@@ -181,17 +184,16 @@ do
 
   mkdir -p $OUTPUT_DIR;
 
-  bwa mem -M -t 2 \
+  bwa mem -M -t 3 \
     -R "@RG\\tID:${SNAME}_${RUNID}_${LANE}\\tSM:${SNAME}\\tLB:${SNAME}\\tPU:${RUNID}_${LANE}\\tCN:Centre National de Genotypage\\tPL:ILLUMINA" \
-    ${REF}/b37.fasta \
+    ${REF}/bwa/b37.fasta \
     $file \
     ${file%.pair1.fastq.gz}.pair2.fastq.gz \
-  | java -Xmx2G -jar ${PICARD_HOME}/SortSam.jar \
+  | java7 -Xmx2G -jar ${PICARD_HOME}/SortSam.jar \
     INPUT=/dev/stdin \
     OUTPUT=${OUTPUT_DIR}/${SNAME}.sorted.bam \
     CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000
 done
-
 ```
 
 Why is it important to set Read Group information? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_aln.ex2.md)
@@ -210,7 +212,8 @@ is merge the results into one BAM.
 Since we identified the reads in the BAM with read groups, even after the merging, we can still identify the origin of each read.
 
 ```
-java -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
+# Merge Data
+java7 -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
   INPUT=alignment/normal/runC0LWRACXX_1/normal.sorted.bam \
   INPUT=alignment/normal/runC0LWRACXX_6/normal.sorted.bam \
   INPUT=alignment/normal/runC0PTAACXX_6/normal.sorted.bam \
@@ -224,7 +227,7 @@ java -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
   OUTPUT=alignment/normal/normal.sorted.bam \
   VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true
 
-java -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
+java7 -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
   INPUT=alignment/tumor/runBC0TV0ACXX_8/tumor.sorted.bam \
   INPUT=alignment/tumor/runC0LVJACXX_6/tumor.sorted.bam \
   INPUT=alignment/tumor/runC0PK4ACXX_7/tumor.sorted.bam \
@@ -268,14 +271,13 @@ The flag is the 2nd column.
 
 
 You can use samtools to filter.
-```
 
+```
 # Say you want to count the *un-aligned* reads you can use
 samtools view -c -f4 alignment/normal/normal.sorted.bam
 
 # Or you want to count the *aligned* reads you can use
 samtools view -c -F4 alignment/normal/normal.sorted.bam
-
 ```
 
 We won't go into too much detail at this point since we want to concentrate on cancer specific issues now.
@@ -308,7 +310,8 @@ It basically runs in 2 steps
 For cancer there is a subtility
 
 ```
-java -Xmx2G  -jar ${GATK_JAR} \
+# Realign
+java7 -Xmx2G  -jar ${GATK_JAR} \
   -T RealignerTargetCreator \
   -R ${REF}/b37.fasta \
   -o alignment/normal/realign.intervals \
@@ -316,7 +319,7 @@ java -Xmx2G  -jar ${GATK_JAR} \
   -I alignment/tumor/tumor.sorted.bam \
   -L 19
 
-java -Xmx2G -jar ${GATK_JAR} \
+java7 -Xmx2G -jar ${GATK_JAR} \
   -T IndelRealigner \
   -R ${REF}/b37.fasta \
   -targetIntervals alignment/normal/realign.intervals \
@@ -360,11 +363,12 @@ one-off coordinates and such.
 This happened a lot with bwa backtrack. This happens less with bwa mem, but it still happens none the less.
 
 ```
-java -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
+# Fix Mate
+java7 -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
   VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000 \
   INPUT=alignment/normal/normal.sorted.realigned.bam \
   OUTPUT=alignment/normal/normal.matefixed.bam
-java -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
+java7 -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
   VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000 \
   INPUT=alignment/tumor/tumor.sorted.realigned.bam \
   OUTPUT=alignment/tumor/tumor.matefixed.bam
@@ -376,14 +380,16 @@ What are duplicate reads? What are they caused by? [Solution](https://github.com
 What are the ways to detect them? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_markdup.ex2.md)
 
 Here we will use picards approach:
+
 ```
-java -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar \
+# Mark Dups
+java7 -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar \
   REMOVE_DUPLICATES=false CREATE_MD5_FILE=true VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true \
   INPUT=alignment/normal/normal.matefixed.bam \
   OUTPUT=alignment/normal/normal.sorted.dup.bam \
   METRICS_FILE=alignment/normal/normal.sorted.dup.metrics
 
-java -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar \
+java7 -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar \
   REMOVE_DUPLICATES=false CREATE_MD5_FILE=true VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true \
   INPUT=alignment/tumor/tumor.matefixed.bam \
   OUTPUT=alignment/tumor/tumor.sorted.dup.bam \
@@ -409,9 +415,10 @@ It runs in 2 steps,
 2- Correct the reads based on these metrics
 
 ```
+# Recalibrate
 for i in normal tumor
 do
-  java -Xmx2G -jar ${GATK_JAR} \
+  java7 -Xmx2G -jar ${GATK_JAR} \
     -T BaseRecalibrator \
     -nct 2 \
     -R ${REF}/b37.fasta \
@@ -420,7 +427,7 @@ do
     -o alignment/${i}/${i}.sorted.dup.recalibration_report.grp \
     -I alignment/${i}/${i}.sorted.dup.bam
 
-    java -Xmx2G -jar ${GATK_JAR} \
+    java7 -Xmx2G -jar ${GATK_JAR} \
       -T PrintReads \
       -nct 2 \
       -R ${REF}/b37.fasta \
@@ -432,9 +439,10 @@ done
 
 Just to see how things change let's make GATK recalibrate after a first pass
 ```
+# Check Recalibration
 for i in normal tumor
 do
-  java -Xmx2G -jar ${GATK_JAR} \
+  java7 -Xmx2G -jar ${GATK_JAR} \
     -T BaseRecalibrator \
     -nct 2 \
     -R ${REF}/b37.fasta \
@@ -444,7 +452,7 @@ do
     -I alignment/${i}/${i}.sorted.dup.bam \
     -BQSR alignment/${i}/${i}.sorted.dup.recalibration_report.grp
 
-  java -Xmx2G -jar ${GATK_JAR} \
+  java7 -Xmx2G -jar ${GATK_JAR} \
     -T AnalyzeCovariates \
     -R ${REF}/b37.fasta \
     -before alignment/${i}/${i}.sorted.dup.recalibration_report.grp \
@@ -470,9 +478,10 @@ Both GATK and BVATools have depth of coverage tools. We wrote our own in BVAtool
 Here we'll use the GATK one
 
 ```
+# Get Depth
 for i in normal tumor
 do
-  java  -Xmx2G -jar ${GATK_JAR} \
+  java7  -Xmx2G -jar ${GATK_JAR} \
     -T DepthOfCoverage \
     --omitDepthOutputAtEachBase \
     --summaryCoverageThreshold 10 \
@@ -499,6 +508,7 @@ That means something is wrong in your coverage. A mix of WGS and WES would show 
 
 ## Insert Size
 ```
+# Get insert size
 for i in normal tumor
 do
   java -Xmx2G -jar ${PICARD_HOME}/CollectInsertSizeMetrics.jar \
@@ -522,6 +532,7 @@ You can try it if you want.
 We prefer the Picard way of computing metrics
 
 ```
+# Get alignment metrics
 for i in normal tumor
 do
   java -Xmx2G -jar ${PICARD_HOME}/CollectAlignmentSummaryMetrics.jar \
@@ -558,8 +569,9 @@ In our case, let's start with:
 mkdir pairedVariants
 ```
 
-## Samtools
+## SAMtools
 ```
+# Variants SAMTools
 samtools mpileup -L 1000 -B -q 1 -D -S -g \
   -f ${REF}/b37.fasta \
   -r 19:50500000-52502000 \
@@ -571,10 +583,11 @@ samtools mpileup -L 1000 -B -q 1 -D -S -g \
 
 ## Broad MuTecT
 ```
+# Variants MuTecT
 # Note MuTecT only works with Java 6, 7 will give you an error
 # if you get "Comparison method violates its general contract!
 # you used java 7"
-java6 -Xmx2G -jar ${MUTECT_JAR} \
+java -Xmx2G -jar ${MUTECT_JAR} \
   -T MuTect \
   -R ${REF}/b37.fasta \
   -dt NONE -baq OFF --validation_strictness LENIENT -nt 2 \
@@ -591,11 +604,12 @@ java6 -Xmx2G -jar ${MUTECT_JAR} \
 
 ## Illumina Strelka
 ```
-cp $STRELKA_HOME}/etc/strelka_config_bwa_default.ini ./
+# Variants Strelka
+cp ${STRELKA_HOME}/etc/strelka_config_bwa_default.ini ./
 # Fix ini since we subsampled
 sed 's/isSkipDepthFilters =.*/isSkipDepthFilters = 1/g' -i strelka_config_bwa_default.ini
 
-$STRELKA_HOME}/bin/configureStrelkaWorkflow.pl \
+${STRELKA_HOME}/bin/configureStrelkaWorkflow.pl \
   --normal=alignment/normal/normal.sorted.dup.recal.bam \
   --tumor=alignment/tumor/tumor.sorted.dup.recal.bam \
   --ref=${REF}/b37.fasta \
@@ -603,7 +617,8 @@ $STRELKA_HOME}/bin/configureStrelkaWorkflow.pl \
   --output-dir=pairedVariants/strelka/
 
   cd pairedVariants/strelka/
-  make -j4
+  make -j3
+  cd $HOME/ebiCancerWorkshop201407
 
   cp pairedVariants/strelka/results/passed.somatic.snvs.vcf pairedVariants/strelka.vcf
 ```
@@ -629,7 +644,8 @@ We typically use snpEff but many use annovar and VEP as well.
 
 Let's run snpEff
 ```
-java  -Xmx6G -jar ${SNPEFF_HOME}/snpEff.jar \
+# SnpEff
+java7  -Xmx6G -jar ${SNPEFF_HOME}/snpEff.jar \
   eff -v -c ${SNPEFF_HOME}/snpEff.config \
   -o vcf \
   -i vcf \
@@ -653,6 +669,7 @@ Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
 Try this:
 
 ```
+# Coverage Track
 for i in normal tumor
 do
   igvtools count \
@@ -661,7 +678,6 @@ do
     alignment/${i}/${i}.sorted.dup.recal.bam.tdf \
     b37
 done
-wait
 ```
 
 # IGV

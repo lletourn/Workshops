@@ -35,7 +35,6 @@ export PICARD_HOME=/usr/local/bin
 export SNPEFF_HOME=/home/Louis/tools/snpEff_v3_5_core/snpEff
 export GATK_JAR=/usr/local/bin/GenomeAnalysisTK.jar
 export BVATOOLS_JAR=/home/Louis/tools/bvatools-1.1/bvatools-1.1-full.jar
-export TRIMMOMATIC_JAR=/usr/local/bin/trimmomatic-0.32.jar
 export REF=/home/Louis/kyotoWorkshop/references/
 
 ```
@@ -66,6 +65,8 @@ A good link to get various telomere repeats is the [Telomerase Database](http://
 First step, count the number of reads with these repeats.
 
 ```
+# Aligned or not, we want them all
+samtools view |
 ```
 
 ## Aknowledgments
