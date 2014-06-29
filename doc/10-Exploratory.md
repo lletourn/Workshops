@@ -287,5 +287,149 @@ java -Xmx5G -jar ~/bvatools-dev.jar mutationrates --vcf ../pairedVariants/mpileu
 
 Now open the file in excel, and plot the Base substitution percent histogram.
 
+# Finding contamination
+This is more to QC but it can be very helpful to find strange patterns in your samples.
+
+Extract positions of somatic variants
+```
+grep -v INDEL pairedVariants/mpileup.vcf \
+ | perl -ne 'my @values=split("\t"); my ($clr) = $values[7] =~ /CLR=(\d+)/; if(defined($clr) && $clr >= 45 && $values[5] >= 70) {print "$values[0]\t$values[1]\t$values[3]\t$values[4]\n"}' \
+ > pairedVariants/mpileup.snpPos.tsv
+```
+
+Now we have our positions, we need the read counts *per lane* for these positions.
+BVATools does this
+```
+for i in normal tumor
+do
+  java -Xmx2G -jar $BVATOOLS_JAR basefreq \
+    --pos pairedVariants/mpileup.snpPos.tsv \
+    --bam alignment/${i}/${i}.sorted.dup.recal.bam \
+    --out alignment/${i}/${i}.somaticSnpPos \
+    --perRG
+done
+```
+
+We can look at one of the files to see what basefreq extracted
+```
+less -S alignment/normal/normal.somaticSnpPos.normal_C0LWRACXX_1.alleleFreq.csv
+```
+
+Now we need to extract and format the data so we can create a PCA and some hierarchical clusters
+```
+# Generate a part of the command
+for i in alignment/*/*.somaticSnpPos*_?.alleleFreq.csv
+do
+  NAME=`echo $i | sed 's/.*somaticSnpPos.\(.*\).alleleFreq.csv/\1/g'`
+  echo "--freq $NAME $i";done | tr '\n' ' '
+done
+
+# Copy this output and paste it at the end of the command like so
+java -Xmx2G -jar ~/bvatools-dev.jar clustfreq \
+--snppos pairedVariants/mpileup.snpPos.tsv \
+--threads 3 \
+--prefix sampleComparison \
+--outputFreq \
+--freq normal_C0LWRACXX_1 alignment/normal/normal.somaticSnpPos.normal_C0LWRACXX_1.alleleFreq.csv \
+--freq normal_C0LWRACXX_6 alignment/normal/normal.somaticSnpPos.normal_C0LWRACXX_6.alleleFreq.csv \
+--freq normal_C0PTAACXX_6 alignment/normal/normal.somaticSnpPos.normal_C0PTAACXX_6.alleleFreq.csv \
+--freq normal_C0PTAACXX_7 alignment/normal/normal.somaticSnpPos.normal_C0PTAACXX_7.alleleFreq.csv \
+--freq normal_C0PTAACXX_8 alignment/normal/normal.somaticSnpPos.normal_C0PTAACXX_8.alleleFreq.csv \
+--freq normal_C0R2BACXX_6 alignment/normal/normal.somaticSnpPos.normal_C0R2BACXX_6.alleleFreq.csv \
+--freq normal_C0R2BACXX_7 alignment/normal/normal.somaticSnpPos.normal_C0R2BACXX_7.alleleFreq.csv \
+--freq normal_C0R2BACXX_8 alignment/normal/normal.somaticSnpPos.normal_C0R2BACXX_8.alleleFreq.csv \
+--freq normal_D0YR4ACXX_1 alignment/normal/normal.somaticSnpPos.normal_D0YR4ACXX_1.alleleFreq.csv \
+--freq normal_D0YR4ACXX_2 alignment/normal/normal.somaticSnpPos.normal_D0YR4ACXX_2.alleleFreq.csv \
+--freq tumor_BC0TV0ACXX_8 alignment/tumor/tumor.somaticSnpPos.tumor_BC0TV0ACXX_8.alleleFreq.csv \
+--freq tumor_C0LVJACXX_6 alignment/tumor/tumor.somaticSnpPos.tumor_C0LVJACXX_6.alleleFreq.csv \
+--freq tumor_C0PK4ACXX_7 alignment/tumor/tumor.somaticSnpPos.tumor_C0PK4ACXX_7.alleleFreq.csv \
+--freq tumor_C0PK4ACXX_8 alignment/tumor/tumor.somaticSnpPos.tumor_C0PK4ACXX_8.alleleFreq.csv \
+--freq tumor_C0R29ACXX_7 alignment/tumor/tumor.somaticSnpPos.tumor_C0R29ACXX_7.alleleFreq.csv \
+--freq tumor_C0R29ACXX_8 alignment/tumor/tumor.somaticSnpPos.tumor_C0R29ACXX_8.alleleFreq.csv \
+--freq tumor_C0TTBACXX_3 alignment/tumor/tumor.somaticSnpPos.tumor_C0TTBACXX_3.alleleFreq.csv \
+--freq tumor_D114WACXX_8 alignment/tumor/tumor.somaticSnpPos.tumor_D114WACXX_8.alleleFreq.csv
+```
+
+Now you should have 2 files
+sampleComparison.freq.csv
+sampleComparison.dist.csv
+
+One contains vectors of snp frequences, the other contains the pairwise Euclidean distance
+Now plot the result in R
+```
+fileName <- "sampleComparison"
+normalName <- "normal"
+
+
+distFile <- paste(fileName, ".dist.csv",sep="")
+
+#distName.noext = sub("[.][^.]*$", "", distName, perl=TRUE)
+
+dataMatrix <- read.csv(distFile, row.names=1, header=TRUE)
+hc <- hclust(as.dist(dataMatrix));
+hcd = as.dendrogram(hc)
+
+colLab <- function(n) {
+    if (is.leaf(n)) {
+        a <- attributes(n)
+        labCol = c("blue");
+        if(grepl(normalName, a$label)) {
+          labCol = c("red");
+        }
+        attr(n, "nodePar") <- c(a$nodePar, lab.col = labCol)
+    }
+    n
+}
+
+# using dendrapply
+clusDendro = dendrapply(hcd, colLab)
+cols <- c("red","blue")
+
+
+freqFile <- paste(fileName, ".freq.csv",sep="")
+data <- read.csv(freqFile, header=FALSE,row.names=1, colClasses=c("character", rep("numeric",4))
+colLanes <- rownames(data)
+colLanes[grep(normalName, colLanes, invert=TRUE)] <- "blue"
+colLanes[grep(normalName, colLanes)] <- "red"
+pca <- prcomp(data)
+
+# make plot
+pdfFile <- paste(fileName,".laneMix.pdf", sep="")
+pdfFile
+pdf(pdfFile)
+par(mar=c(3,3,1,12))
+plot(clusDendro, main = "Lane distances", horiz=TRUE)
+legend("top", legend = c("Normal","Tumor"), fill = cols, border = cols)
+
+par(mar=c(1,1,1,1))
+plot(pca$x[,1:2])
+text(pca$x[,1:2], rownames(data), col=colLanes)
+screeplot(pca, type="lines")
+plot(pca$x[,2:3])
+text(pca$x[,2:3], rownames(data), col=colLanes)
+dev.off()
+
+pngFile <- paste(fileName,".laneMix.png", sep="")
+pngFile
+png(pngFile, type="cairo", width=1920, height=1080)
+par(mar=c(3,3,1,12))
+par(mfrow=c(2,1))
+plot(clusDendro, main = "Lane distances", horiz=TRUE)
+legend("top", legend = c("Normal","Tumor"), fill = cols, border = cols)
+
+plot(pca$x[,1:2])
+text(pca$x[,1:2], rownames(data), col=colLanes)
+dev.off()
+
+```
+
+Look at the graphs.
+
+You could do this directly in R but
+1- The basefreq format is not simple to parse
+2- When you have thousands of somatics, and/or hundreds of samples, R struggles to build de pairwise distance and the PCA
+   This is why we precompute it in java before.
+
+
 ## Aknowledgments
 The format for this tutorial has been inspired from Mar Gonzalez Porta of Embl-EBI, who I would like to thank and acknowledge. I also want to acknowledge Mathieu Bourgey, Francois Lefebvre, Maxime Caron and Guillaume Bourque for the help in building these pipelines and working with all the various datasets.
