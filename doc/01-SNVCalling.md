@@ -83,7 +83,7 @@ Why shouldn't you just do
 ```
 zgrep -c "^@" raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz
 ```
-[Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/blob/_fastq.ex2.md)
+[Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_fastq.ex2.md)
 
 
 ### Quality
@@ -110,7 +110,7 @@ What stands out in the graphs?
 All the generated graphics have their uses. This being said 2 of them are particularly useful to get an overal picture of how good or bad a run went. These are the Quality box plots and the nucleotide content graphs.
 
 The quality of a base is computated using the Phread quality score.
-![Phred quality score formula](img/phredFormula.png)
+![Phred quality score formula](../img/phredFormula.png)
 
 The formula outputs an integer that is encoded using an [ASCII](http://en.wikipedia.org/wiki/ASCII) table. The way the lookup is done is by taking the the phred score adding 33 and using this number as a lookup in the table. The Wikipedia entry for the [FASTQ format](http://en.wikipedia.org/wiki/FASTQ_format) has a summary of the varying values.
 
@@ -136,6 +136,9 @@ We can look at the adapters
 cat adapters.fa
 ```
 Why are there 2 different ones? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_trim.ex1.md)
+
+Another reason we want to run Trimmomatic here is to convert the data from phred+33 to phred+64. Trimmomatic does this directly.
+In modern datasets this is not needed.
 
 
 Let's try removing them and see what happens.
@@ -377,6 +380,7 @@ java7 -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
 # Mark duplicates
 As the step says, this is to mark duplicate reads.
 What are duplicate reads? What are they caused by? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_markdup.ex1.md)
+
 What are the ways to detect them? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_markdup.ex2.md)
 
 Here we will use picards approach:
