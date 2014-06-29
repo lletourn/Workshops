@@ -29,13 +29,17 @@ The structure of your folders should now look like this:
 * [Unix comand line cheat sheet](http://sites.tufts.edu/cbi/files/2013/01/linux_cheat_sheet.pdf)
 
 ### Environment setup
+We'll need an updated bvatools for these exercises
 ```
+cd $HOME/ebiCancerWorkshop201407
+wget "https://bitbucket.org/mugqic/bvatools/downloads/bvatools-dev.jar"
+
 export APP_ROOT=/home/training/Applications/
 export PATH=$PATH:$APP_ROOT/bedtools2/bin
 export PICARD_HOME=$APP_ROOT/picard-tools-1.115/
 export SNPEFF_HOME=$APP_ROOT/snpEff/
 export GATK_JAR=$APP_ROOT/gatk/GenomeAnalysisTK.jar
-export BVATOOLS_JAR=$HOME/bvatools-dev.jar
+export BVATOOLS_JAR=$HOME/ebiCancerWorkshop201407/bvatools-dev.jar
 export TRIMMOMATIC_JAR=$APP_ROOT/Trimmomatic-0.32/trimmomatic-0.32.jar
 export STRELKA_HOME=$APP_ROOT/strelka-1.0.13/
 export REF=/home/training/ebiCancerWorkshop201407/references/
