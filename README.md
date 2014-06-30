@@ -16,3 +16,6 @@ This work is licensed under a [Creative Commons Attribution-ShareAlike 3.0 Unpor
 1. **[Alignment and somatic SNV Calling](doc/01-SNVCalling.md)**
 2. **[Expoloratory Analysis](doc 10-Exploratory.md)**
 
+## Material source
+The whole practical can be found here:  
+https://github.com/lletourn/Workshops/tree/ebiCancerWorkshop201407

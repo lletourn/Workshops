@@ -1,11 +1,15 @@
 # Introduction to DNA-Seq processing
 This workshop will show you how to launch individual steps of a complete DNA-Seq pipeline for Cancer analysis
 
+## Source Material
+All the documentation for the practicals can be found on github here:  
+https://github.com/lletourn/Workshops/tree/ebiCancerWorkshop201407
+
+## Data Soruce
 We will be working on a CageKid sample pair, patient C0098.
 The CageKid project is part of ICGC and is focused on renal cancer in many of it's forms.
-The raw data can be found on EGA and calls, RNA and DNA, can be found on the ICGC portal.
-More details about CageKid here:
-http://www.cng.fr/cagekid/
+The raw data can be found on EGA and calls, RNA and DNA, can be found on the ICGC portal. 
+For more details about CageKid: http://www.cng.fr/cagekid/
 
 For practical reasons we subsampled the reads from the sample because running the whole dataset would take way too much time and resources.
 
@@ -28,7 +32,7 @@ The initial structure of your folders should look like this:
 * [Unix comand line cheat sheet](http://sites.tufts.edu/cbi/files/2013/01/linux_cheat_sheet.pdf)
 
 ### Environment setup
-```
+``` {.bash}
 export APP_ROOT=/home/training/Applications/
 export PATH=$PATH:$APP_ROOT/bwa-0.7.9a:$APP_ROOT/tabix-0.2.6/:$APP_ROOT/IGVTools
 export PICARD_HOME=$APP_ROOT/picard-tools-1.115/
@@ -87,7 +91,7 @@ zgrep -c "^@" raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz
 
 
 ### Quality
-We can't look at all the reads. Especially when working with whole genome 50x data. You could easilly have Billions of reads.
+We can't look at all the reads. Especially when working with whole genome 50x data. You could easilly have billions of reads.
 
 Tools like FastQC and BVATools readsqc can be used to plot many metrics from these data sets.
 
@@ -109,7 +113,7 @@ What stands out in the graphs?
 
 All the generated graphics have their uses. This being said 2 of them are particularly useful to get an overal picture of how good or bad a run went. These are the Quality box plots and the nucleotide content graphs.
 
-The quality of a base is computated using the Phread quality score.
+The quality of a base is computated using the Phread quality score.   
 ![Phred quality score formula](../img/phredFormula.png)
 
 The formula outputs an integer that is encoded using an [ASCII](http://en.wikipedia.org/wiki/ASCII) table. The way the lookup is done is by taking the the phred score adding 33 and using this number as a lookup in the table. The Wikipedia entry for the [FASTQ format](http://en.wikipedia.org/wiki/FASTQ_format) has a summary of the varying values.
@@ -121,7 +125,8 @@ Why does this happen [Solution](https://github.com/lletourn/Workshops/blob/ebiCa
 
 
 ### Trimming
-After this careful analysis of the raw data we see that
+After this careful analysis of the raw data we see that:
+
 - Some reads have bad 3' ends.
 - Some reads have adapter sequences in them.
 - Data needs to be converted into phred+33 from phred+64
@@ -188,7 +193,8 @@ do
   mkdir -p $OUTPUT_DIR;
 
   bwa mem -M -t 3 \
-    -R "@RG\\tID:${SNAME}_${RUNID}_${LANE}\\tSM:${SNAME}\\tLB:${SNAME}\\tPU:${RUNID}_${LANE}\\tCN:Centre National de Genotypage\\tPL:ILLUMINA" \
+    -R "@RG\\tID:${SNAME}_${RUNID}_${LANE}\\tSM:${SNAME}\\t\
+LB:${SNAME}\\tPU:${RUNID}_${LANE}\\tCN:Centre National de Genotypage\\tPL:ILLUMINA" \
     ${REF}/bwa/b37.fasta \
     $file \
     ${file%.pair1.fastq.gz}.pair2.fastq.gz \
@@ -289,29 +295,31 @@ How many reads mapped and unmapped were there? [Solution](https://github.com/lle
 
 
 Another useful bit of information in the SAM is the CIGAR string.
-It's the 6th column in the file. This column explains how the alignment was achieved.
-M == base aligns *but doesn't have to be a match*. A SNP will have an M even if it disagrees with the reference.
-I == Insertion
-D == Deletion
-S == soft-clips. These are handy to find un removed adapters, viral insertions, etc.
+It's the 6th column in the file. This column explains how the alignment was achieved.  
 
-An in depth explanation of the CIGAR can be found [here](http://genome.sph.umich.edu/wiki/SAM)
-The exact details of the cigar string can be found in the SAM spec as well.
-Another good site
+- M == base aligns *but doesn't have to be a match*. A SNP will have an M even if it disagrees with the reference.
+- I == Insertion
+- D == Deletion
+- S == soft-clips. These are handy to find un removed adapters, viral insertions, etc.
+
+An in depth explanation of the CIGAR can be found there:  
+http://genome.sph.umich.edu/wiki/SAM  
+The exact details of the cigar string can be found in the SAM spec as well.  
+http://samtools.github.io/hts-specs/SAMv1.pdf  
 
 # Cleaning up alignments
-We started by cleaning up the raw reads. Now we need to fix some alignments.
+We started by cleaning up the raw reads. Now we need to fix some alignments.  
 
-The first step for this is to realign around indels and snp dense regions.
-The Genome Analysis toolkit has a tool for this called IndelRealigner.
+The first step for this is to realign around indels and snp dense regions.  
+The Genome Analysis toolkit has a tool for this called IndelRealigner.  
 
 It basically runs in 2 steps
+
 1- Find the targets
 2- Realign them.
 
 
 For cancer there is a subtility
-
 ```
 # Realign
 java7 -Xmx2G  -jar ${GATK_JAR} \
@@ -335,10 +343,10 @@ java7 -Xmx2G -jar ${GATK_JAR} \
 
 ```
 
-Why did we use both normal and tumor together? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex3.md)
+Why did we use both normal and tumor together? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex3.md)  
 
-How could we make this go faster? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex1.md)
-How many regions did it think needed cleaning? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex2.md)
+How could we make this go faster? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex1.md)  
+How many regions did it think needed cleaning? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex2.md)  
 
 Indel Realigner also makes sure the called deletions are left aligned when there is a microsatellite or homopolymer.
 ```

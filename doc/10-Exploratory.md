@@ -1,4 +1,4 @@
-# Introduction to DNA-Seq processing
+# Exploratory analysis of cancer data
 This workshop will be a mix of different methods to look and explore your data.
 
 We will be working on the same BAMs you generated from the SNV part.
@@ -7,39 +7,18 @@ This leads to some strange results in this part.
 
 This work is licensed under a [Creative Commons Attribution-ShareAlike 3.0 Unported License](http://creativecommons.org/licenses/by-sa/3.0/deed.en_US). This means that you are able to copy, share and modify the work, as long as the result is distributed under the same license.
 
-## Original Setup
-
-The structure of your folders should now look like this:
-```
-<ROOT>
-|-- raw_reads/                              # fastqs from the center (down sampled)
-    `-- normal                              # The blood sample directory
-        `-- run*_?                          # Lane directory by run number. Contains the fastqs
-    `-- tumor                               # The tumor sample directory
-        `-- run*_?                          # Lane directory by run number. Contains the fastqs
-|-- alignment/                              # fastqs from the center (down sampled)
-    `-- normal                              # The blood sample directory
-        `-- normal.sorted.dup.recal.bam     # Normal alignment file
-    `-- tumor                               # The tumor sample directory
-        `-- tumor.sorted.dup.recal.bam      # Tumor alignment file
-`-- project.nanuq.csv        # sample sheet
-```
-
-### Cheat sheets
-* [Unix comand line cheat sheet](http://sites.tufts.edu/cbi/files/2013/01/linux_cheat_sheet.pdf)
-
 ### Environment setup
-We'll need an updated bvatools for these exercises
+We will need an updated bvatools for these exercises
 ```
 cd $HOME/ebiCancerWorkshop201407
 wget "https://bitbucket.org/mugqic/bvatools/downloads/bvatools-dev.jar"
 
+export BVATOOLS_JAR=$HOME/ebiCancerWorkshop201407/bvatools-dev.jar
 export APP_ROOT=/home/training/Applications/
 export PATH=$PATH:$APP_ROOT/bedtools2/bin
 export PICARD_HOME=$APP_ROOT/picard-tools-1.115/
 export SNPEFF_HOME=$APP_ROOT/snpEff/
 export GATK_JAR=$APP_ROOT/gatk/GenomeAnalysisTK.jar
-export BVATOOLS_JAR=$HOME/ebiCancerWorkshop201407/bvatools-dev.jar
 export TRIMMOMATIC_JAR=$APP_ROOT/Trimmomatic-0.32/trimmomatic-0.32.jar
 export STRELKA_HOME=$APP_ROOT/strelka-1.0.13/
 export REF=/home/training/ebiCancerWorkshop201407/references/
@@ -55,12 +34,9 @@ These are all already installed, but here are the original links.
   * [BVATools](https://bitbucket.org/mugqic/bvatools/downloads)
   * [SAMTools](http://sourceforge.net/projects/samtools/)
   * [IGV](http://www.broadinstitute.org/software/igv/download)
-  * [BWA](http://bio-bwa.sourceforge.net/)
   * [Genome Analysis Toolkit](http://www.broadinstitute.org/gatk/)
   * [Picard](http://picard.sourceforge.net/)
   * [SnpEff](http://snpeff.sourceforge.net/)
-  * [MuTect](http://www.broadinstitute.org/cancer/cga/mutect)
-  * [Strelka](https://sites.google.com/site/strelkasomaticvariantcaller/)
 
 # Exome AI
 Calling CNVs in exome is not simple. We have a tool that can help.

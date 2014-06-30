@@ -7,14 +7,15 @@
 # pandoc *.md
 # -o ../pdf/practical.pdf
 # --toc
-# --variable title:"DNA-Seq processing - Kyoto Course on Bioinformatics 2014"
-# --variable date:"2014/03/10"
+# --variable title:"Cancer Genomics SNV, Exploratory practical - Cancer Genomics Workshop 2014"
+# --variable date:"2014/07/02"
 # --variable author:"Louis Letourneau"
 # --variable links-as-notes
 # --variable linkcolor:black
 # --variable urlcolor:black
 # --variable geometry:margin=3cm
 
-pandoc *.md -o ../pdf/practical.pdf --toc --variable title:"DNA-Seq processing - Kyoto Course on Bioinformatics 2014" --variable date:"2014/03/10" --variable author:"Louis Letourneau" --variable links-as-notes --variable linkcolor:black --variable urlcolor:black --variable geometry:margin=3cm
+# From the doc directory
+pandoc *.md -o ../pdf/practical.pdf --toc --variable title:"Cancer Genomics SNV, Exploratory practical - Cancer Genomics Workshop 2014" --variable date:"2014/07/02" --variable author:"Louis Letourneau" --variable links-as-notes --variable linkcolor:black --variable urlcolor:black --variable geometry:margin=3cm
 
 
