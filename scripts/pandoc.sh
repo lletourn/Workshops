@@ -5,7 +5,7 @@
 #
 # human readable command:
 # pandoc *.md
-# -o ../pdf/practical.pdf
+# -o ../pdf/day2-3_SNV_Exploratory.pdf
 # --toc
 # --variable title:"Cancer Genomics SNV, Exploratory practical - Cancer Genomics Workshop 2014"
 # --variable date:"2014/07/02"
@@ -16,6 +16,6 @@
 # --variable geometry:margin=3cm
 
 # From the doc directory
-pandoc *.md -o ../pdf/practical.pdf --toc --variable title:"Cancer Genomics SNV, Exploratory practical - Cancer Genomics Workshop 2014" --variable date:"2014/07/02" --variable author:"Louis Letourneau" --variable links-as-notes --variable linkcolor:black --variable urlcolor:black --variable geometry:margin=3cm
+pandoc *.md -o ../pdf/day2-3_SNV_Exploratory.pdf --toc --variable title:"Cancer Genomics SNV, Exploratory practical - Cancer Genomics Workshop 2014" --variable date:"2014/07/02" --variable author:"Louis Letourneau" --variable links-as-notes --variable linkcolor:black --variable urlcolor:black --variable geometry:margin=3cm
 
 

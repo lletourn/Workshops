@@ -9,7 +9,8 @@ This work is licensed under a [Creative Commons Attribution-ShareAlike 3.0 Unpor
 
 ### Environment setup
 We will need an updated bvatools for these exercises
-```
+
+``` {.bash}
 cd $HOME/ebiCancerWorkshop201407
 wget "https://bitbucket.org/mugqic/bvatools/downloads/bvatools-dev.jar"
 
@@ -54,15 +55,17 @@ A good link to get various telomere repeats is the [Telomerase Database](http://
 
 First step, count the number of reads with these repeats.
 
-```
+``` {.bash}
 # Aligned or not, we want them all
 samtools view alignment/normal/normal.sorted.bam | awk '{if($10 ~ /TTAGGGTTAGGGTTAGGG/) {SUM++}} END {print "NbTeloReads",SUM}'
 samtools view alignment/tumor/tumor.sorted.bam | awk '{if($10 ~ /TTAGGGTTAGGGTTAGGG/) {SUM++}} END {print "NbTeloReads",SUM}'
 ```
-Why did we put multiple copied of the repeat in the search? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_telo.ex1.md)
+
+Why did we put multiple copied of the repeat in the search? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_telo.ex1.md)  
 
 Next look in the alignments summary file we generated yesterday and extract the number of aligned reads.
-```
+
+``` {.bash}
 less -S alignment/normal/normal.sorted.dup.recal.metric.alignment.tsv
 less -S alignment/tumor/tumor.sorted.dup.recal.metric.alignment.tsv
 ```
@@ -78,39 +81,46 @@ For this part we will try to find significantly mutated genes.
 To do this we will use Genome MuSiC
 
 First off there are few things are needed to make MuSiC work
-```
+
+``` {.bash}
 mkdir genomeMusic
 cd genomeMusic
 ```
-Then:
-1- A region of interest file (ROI)
-2- A Mutation Annotation Format file (MAF)
-3- A bam list
+
+Then:  
+
+1. A region of interest file (ROI)
+2. A Mutation Annotation Format file (MAF)
+3. A bam list
 
 For the ROI we could use UCSC or BioMart to extract these. We will use Ensembl biomart.
-Go to www.ensembl.org/biomart/martview/
+Go to www.ensembl.org/biomart/martview/  
+
 - Choose Database Ensembl Genes 75
 - Choose Homo Sapiens Genes
 - In filters (click en the left heading), Limit to Genes with RefSeq mRNA ID(s), and choose only chromosome 19 to make the statistical test run faster.
 - Under Attributes
-  - Choose Structure. Now click in this order (to have a BED file tyoe output)
-  - Chromosome Name
-  - Exon Start
-  - Exon End
-  - Associated Gene Name
+    - Choose Structure. Now click in this order (to have a BED file tyoe output)
+    - Chromosome Name
+    - Exon Start
+    - Exon End
+    - Associated Gene Name
 
 Download the mart_results.txt file 
 put the file in your genomeMusic directory.
 
 Removed the header line (the first line from the file)
 Then we need to convert the tab file to a bed.
-```
+
+``` {.bash}
 awk '{OFS="\t"} {print $1,$2-3,$3+2,$4}' mart_export.txt | sort -k1V,1V -k2n,2n > exons.roi.bed
 ```
+
 Why did we substract 3 from the start column? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_music.ex1.md)
 
 Merge overlaps to not count twice.
-```
+
+``` {.bash}
 bedtools merge -nms -i exons.roi.bed | sed 's/;.*//g' > exons.roi.merged.bed
 ```
 
@@ -118,36 +128,51 @@ The sed command is to remove GENE;GENE;GENE when bedtools merges.
 This is not ideal though when genes overlap. A more complicated way should be used
 
 Now for the bam list
-```
-echo -e "Sample\t$HOME/ebiCancerWorkshop201407/alignment/normal/normal.sorted.dup.recal.bam\t$HOME/ebiCancerWorkshop201407/alignment/tumor/tumor.sorted.dup.recal.bam" > bam_list.fofn
+
+``` {.bash}
+echo -e \
+"Sample\t$HOME/ebiCancerWorkshop201407/alignment/normal/normal.sorted.dup.recal.bam\t$HOME/ebiCancerWorkshop201407/alignment/tumor/tumor.sorted.dup.recal.bam" \
+> bam_list.fofn
 ```
 
 Let's compute the coverage to see what's usable between samples (we'll come back to this)
 ```
 mkdir musicOutput
-gmt music bmr calc-covg --roi-file exons.roi.merged.bed --bam-list bam_list.fofn --output-dir musicOutput/ --reference-sequence $REF/b37.fasta
+gmt music bmr calc-covg --roi-file exons.roi.merged.bed \
+  --bam-list bam_list.fofn --output-dir musicOutput/ \
+  --reference-sequence $REF/b37.fasta
 ```
 
 Now let's generate the MAF file
-```
-java -Xmx3G -jar $BVATOOLS_JAR vcf2maf --vcf ../pairedVariants/mpileup.snpeff.vcf --minQual 70 --minCLR 45 --forceTumorName Sample --output ../pairedVariants/mpileup.snpeff.maf
+
+``` {.bash}
+java7 -Xmx3G -jar $BVATOOLS_JAR vcf2maf \
+  --vcf ../pairedVariants/mpileup.snpeff.vcf \
+  --minQual 70 --minCLR 45 \
+  --forceTumorName Sample \
+  --output ../pairedVariants/mpileup.snpeff.maf
 
 # Usually you'll have one maf per patient so you'll need to merge them
 cat ../pairedVariants/*.maf > genomeMusic.maf
 ```
 
 Now there's a problem here. This version of bvatools requires a mapper which we didn't generate. A new version will come out shortly that fixes this.
-In the mean time, modify the MAF 
+In the mean time, modify the MAF  
+
 - Add SPIB to the first entry
 - Add KLK1,KLKP1,ETFB,SIGLEC8 to the last 4
 
 Now compute the background rate
-```
-gmt music bmr calc-bmr --roi-file exons.roi.merged.bed --reference-sequence $REF/b37.fasta --bam-list bam_list.fofn --output-dir musicOutput/ --maf-file genomeMusic.maf
+
+``` {.bash}
+gmt music bmr calc-bmr --roi-file exons.roi.merged.bed \
+  --reference-sequence $REF/b37.fasta --bam-list bam_list.fofn \
+  --output-dir musicOutput/ --maf-file genomeMusic.maf
 ```
 
 And finally compute the significance list
-```
+
+``` {.bash}
 gmt music smg --gene-mr-file musicOutput/gene_mrs --output-file musicOutput/smg
 ```
 
@@ -161,7 +186,8 @@ smg only contains the genes for which at least 2 out of the 3 statistical test h
 In this case with one subsampled sample, the results don't make much sens.
 
 # Substitution plots
-After calling somatic mutations on WGS, we often want to see
+After calling somatic mutations on WGS, we often want to see  
+
 - What is the transition counts vs transversion counts
 - Where do these mutations fall, Intergenic, UTR5', CDS, etc
 
@@ -170,10 +196,10 @@ There are a milion ways to do this, we will try one.
 First, as we did with MuSiC we need to figure out what parts of the genome are callable accross all the samples.
 To do this we will use a GATK tool called CallableLoci
 
-```
+``` {.bash}
 for i in normal tumor
 do
-  java -Xmx1G -jar ${GATK_JAR} \
+  java7 -Xmx1G -jar ${GATK_JAR} \
     -T CallableLoci  -R $REF/b37.fasta \
     -o alignment/${i}/${i}.callable.bed \
     --summary alignment/${i}/${i}.callable.summary.txt \
@@ -186,11 +212,14 @@ wait
 ```
 
 Now that we have this let's remove/intersect all the samples callable region from the whole genome
-```
+
+``` {.bash}
 mkdir substitutions/
 cd substitutions/
 
-cat $REF/b37.dict | perl -n -e 'if(/^@SQ/){my ($chr,$pos) = /.*SN:([^\t]+)\t.*LN:([0-9]+)\t.*/; print $chr."\t0\t".$pos."\n"}' | grep -v GL | tail -n+2 > wholeGenomeTrack.bed
+cat $REF/b37.dict | perl -n -e \
+  'if(/^@SQ/){my ($chr,$pos) = /.*SN:([^\t]+)\t.*LN:([0-9]+)\t.*/; print $chr."\t0\t".$pos."\n"}' \
+  | grep -v GL | tail -n+2 > wholeGenomeTrack.bed
 cp wholeGenomeTrack.bed tmp.bed
 for i in ../alignment/*/*.callable.bed
 do
@@ -208,16 +237,17 @@ What are the main causes of lost of callability? [Solution](https://github.com/l
 
 Now let's get the rest of the tracks per region.
 We will extract them from snpEffs database
-```
+
+``` {.bash}
 # Remove track header
-java -Xmx1G -jar $BVATOOLS_JAR extractSnpEffTracks -c $SNPEFF_HOME/snpEff.config hg19 | sed '/^track/d' > snpEffRegions.bed
+java7 -Xmx1G -jar $BVATOOLS_JAR extractSnpEffTracks -c $SNPEFF_HOME/snpEff.config hg19 | sed '/^track/d' > snpEffRegions.bed
 
 awk '{print > "snpEff.hg19."_$4_".bed"}' snpEffRegions.bed
 ```
 
 Now we have one bed track per region. But we are missing one, do you know which? [Solution)[https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_subst.ex2.md)
 
-```
+``` {.bash}
 cp wholeGenomeTrack.bed tmp.bed
 for i in snpEff.hg19.[UCD]*.bed snpEff.hg19.INTRON.bed
 do
@@ -228,7 +258,8 @@ mv tmp.bed snpEff.hg19.INTERGENIC.bed
 ```
 
 Let's check the size of each region from our project
-```
+
+``` {.bash}
 for i in snpEff.hg19.*.bed
 do
   echo $i
@@ -245,9 +276,9 @@ Again, here since we down sampled the representation is pretty bad. But in norma
 This is were kits like the no PCR help quite a bit.
 
 Now the good part, let's extract the counts
-```
 
-java -Xmx5G -jar ~/bvatools-dev.jar mutationrates --vcf ../pairedVariants/mpileup.vcf \
+``` {.bash}
+java7 -Xmx5G -jar ~/bvatools-dev.jar mutationrates --vcf ../pairedVariants/mpileup.vcf \
   --bed Callable:projectCallableRegions.bed \
   --bed CDS:snpEff.hg19.CDS.bed \
   --bed DOWNSTREAMcallable.:snpEff.hg19.DOWNSTREAM.bed \
@@ -267,7 +298,8 @@ Now open the file in excel, and plot the Base substitution percent histogram.
 This is more to QC but it can be very helpful to find strange patterns in your samples.
 
 Extract positions of somatic variants
-```
+
+``` {.bash}
 grep -v INDEL pairedVariants/mpileup.vcf \
  | perl -ne 'my @values=split("\t"); my ($clr) = $values[7] =~ /CLR=(\d+)/; if(defined($clr) && $clr >= 45 && $values[5] >= 70) {print "$values[0]\t$values[1]\t$values[3]\t$values[4]\n"}' \
  > pairedVariants/mpileup.snpPos.tsv
@@ -275,10 +307,11 @@ grep -v INDEL pairedVariants/mpileup.vcf \
 
 Now we have our positions, we need the read counts *per lane* for these positions.
 BVATools does this
-```
+
+``` {.bash}
 for i in normal tumor
 do
-  java -Xmx2G -jar $BVATOOLS_JAR basefreq \
+  java7 -Xmx2G -jar $BVATOOLS_JAR basefreq \
     --pos pairedVariants/mpileup.snpPos.tsv \
     --bam alignment/${i}/${i}.sorted.dup.recal.bam \
     --out alignment/${i}/${i}.somaticSnpPos \
@@ -287,12 +320,14 @@ done
 ```
 
 We can look at one of the files to see what basefreq extracted
-```
+
+``` {.bash}
 less -S alignment/normal/normal.somaticSnpPos.normal_C0LWRACXX_1.alleleFreq.csv
 ```
 
 Now we need to extract and format the data so we can create a PCA and some hierarchical clusters
-```
+
+``` {.bash}
 # Generate a part of the command
 for i in alignment/*/*.somaticSnpPos*_?.alleleFreq.csv
 do
@@ -301,7 +336,7 @@ do
 done
 
 # Copy this output and paste it at the end of the command like so
-java -Xmx2G -jar ~/bvatools-dev.jar clustfreq \
+java7 -Xmx2G -jar ~/bvatools-dev.jar clustfreq \
 --snppos pairedVariants/mpileup.snpPos.tsv \
 --threads 3 \
 --prefix sampleComparison \
@@ -332,7 +367,7 @@ sampleComparison.dist.csv
 
 One contains vectors of snp frequences, the other contains the pairwise Euclidean distance
 Now plot the result in R
-```
+``` {.r}
 fileName <- "sampleComparison"
 normalName <- "normal"
 
@@ -403,8 +438,7 @@ Look at the graphs.
 
 You could do this directly in R but
 1- The basefreq format is not simple to parse
-2- When you have thousands of somatics, and/or hundreds of samples, R struggles to build de pairwise distance and the PCA
-   This is why we precompute it in java before.
+2- When you have thousands of somatics, and/or hundreds of samples, R struggles to build de pairwise distance and the PCA. This is why we precompute it in java before.
 
 
 ## Aknowledgments

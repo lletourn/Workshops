@@ -69,7 +69,7 @@ The first thing to do is download it, the second thing is making sure it is of g
 Let's first explore the fastq file.
 
 Try these commands
-```
+``` {.bash}
 zless -S raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz
 
 zcat raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz | head -n4
@@ -84,7 +84,7 @@ You could also just count the reads
 zgrep -c "^@HISEQ2" raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz
 ```
 Why shouldn't you just do
-```
+``` {.bash}
 zgrep -c "^@" raw_reads/normal/runD0YR4ACXX_1/normal.64.pair1.fastq.gz
 ```
 [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_fastq.ex2.md)
@@ -97,7 +97,7 @@ Tools like FastQC and BVATools readsqc can be used to plot many metrics from the
 
 Let's look at the data:
 
-```
+``` {.bash}
 # Generate original QC
 mkdir originalQC/
 java7 -Xmx1G -jar ${BVATOOLS_JAR} readsqc --quality 64 \
@@ -137,7 +137,7 @@ Since they are not part of the genome of interest they should be removed if enou
 
 To be able to remove the adapters we need to feed them to a tool. In this case we will use Trimmomatic. The adapter file is already in your work folder.
 We can look at the adapters
-```
+``` {.bash}
 cat adapters.fa
 ```
 Why are there 2 different ones? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_trim.ex1.md)
@@ -147,7 +147,7 @@ In modern datasets this is not needed.
 
 
 Let's try removing them and see what happens.
-```
+``` {.bash}
 # Trim and convert data
 for file in raw_reads/*/run*_?/*.pair1.fastq.gz;
 do
@@ -179,7 +179,7 @@ The raw reads are now cleaned up of artefacts we can align each lane separatly.
 
 Why should this be done separatly? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_aln.ex1.md)
 
-```
+``` {.bash}
 # Align data
 for file in reads/*/run*_?/*.pair1.fastq.gz;
 do
@@ -220,7 +220,7 @@ is merge the results into one BAM.
 
 Since we identified the reads in the BAM with read groups, even after the merging, we can still identify the origin of each read.
 
-```
+``` {.bash}
 # Merge Data
 java7 -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
   INPUT=alignment/normal/runC0LWRACXX_1/normal.sorted.bam \
@@ -252,7 +252,8 @@ java7 -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
 
 You should now have one normal and one tumor BAM containing all your data.
 Let's double check
-```
+
+``` {.bash}
 ls -l alignment/normal/
 samtools view -H alignment/normal/normal.sorted.bam | grep "^@RG"
 
@@ -264,8 +265,7 @@ Why did we use the ```-H``` switch? Try without. What happens? [Solution](https:
 ## SAM/BAM
 Let's spend some time to explore bam files.
 
-try
-```
+``` {.bash}
 samtools view alignment/normal/normal.sorted.bam | head -n2
 ```
 
@@ -281,7 +281,7 @@ The flag is the 2nd column.
 
 You can use samtools to filter.
 
-```
+``` {.bash}
 # Say you want to count the *un-aligned* reads you can use
 samtools view -c -f4 alignment/normal/normal.sorted.bam
 
@@ -320,7 +320,8 @@ It basically runs in 2 steps
 
 
 For cancer there is a subtility
-```
+
+``` {.bash}
 # Realign
 java7 -Xmx2G  -jar ${GATK_JAR} \
   -T RealignerTargetCreator \
@@ -349,6 +350,7 @@ How could we make this go faster? [Solution](https://github.com/lletourn/Worksho
 How many regions did it think needed cleaning? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_realign.ex2.md)  
 
 Indel Realigner also makes sure the called deletions are left aligned when there is a microsatellite or homopolymer.
+
 ```
 This
 ATCGAAAA-TCG
@@ -373,7 +375,7 @@ one-off coordinates and such.
 
 This happened a lot with bwa backtrack. This happens less with bwa mem, but it still happens none the less.
 
-```
+``` {.bash}
 # Fix Mate
 java7 -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
   VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000 \
@@ -393,8 +395,8 @@ What are the ways to detect them? [Solution](https://github.com/lletourn/Worksho
 
 Here we will use picards approach:
 
-```
-# Mark Dups
+``` {.bash}
+# Mark Duplicates
 java7 -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar \
   REMOVE_DUPLICATES=false CREATE_MD5_FILE=true VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true \
   INPUT=alignment/normal/normal.matefixed.bam \
@@ -426,7 +428,7 @@ It runs in 2 steps,
 1- Build covariates based on context and known snp sites
 2- Correct the reads based on these metrics
 
-```
+``` {.bash}
 # Recalibrate
 for i in normal tumor
 do
@@ -450,7 +452,8 @@ done
 ```
 
 Just to see how things change let's make GATK recalibrate after a first pass
-```
+
+``` {.bash}
 # Check Recalibration
 for i in normal tumor
 do
@@ -489,7 +492,7 @@ Both GATK and BVATools have depth of coverage tools. We wrote our own in BVAtool
 
 Here we'll use the GATK one
 
-```
+``` {.bash}
 # Get Depth
 for i in normal tumor
 do
@@ -519,7 +522,9 @@ Another way is to compare the mean to the median. If both are almost equal, your
 That means something is wrong in your coverage. A mix of WGS and WES would show very different mean and median values.
 
 ## Insert Size
-```
+Now we extract the insert size of the fragments. This can be informative to see how well the library was constructed
+
+``` {.bash}
 # Get insert size
 for i in normal tumor
 do
@@ -543,7 +548,7 @@ You can try it if you want.
 
 We prefer the Picard way of computing metrics
 
-```
+``` {.bash}
 # Get alignment metrics
 for i in normal tumor
 do
@@ -577,12 +582,14 @@ many, MANY others can be found here:
 https://www.biostars.org/p/19104/
 
 In our case, let's start with:
-```
+
+``` {.bash}
 mkdir pairedVariants
 ```
 
 ## SAMtools
-```
+
+``` {.bash}
 # Variants SAMTools
 samtools mpileup -L 1000 -B -q 1 -D -S -g \
   -f ${REF}/b37.fasta \
@@ -594,7 +601,8 @@ samtools mpileup -L 1000 -B -q 1 -D -S -g \
 ```
 
 ## Broad MuTecT
-```
+
+``` {.bash}
 # Variants MuTecT
 # Note MuTecT only works with Java 6, 7 will give you an error
 # if you get "Comparison method violates its general contract!
@@ -615,7 +623,8 @@ java -Xmx2G -jar ${MUTECT_JAR} \
 ```
 
 ## Illumina Strelka
-```
+
+``` {.bash}
 # Variants Strelka
 cp ${STRELKA_HOME}/etc/strelka_config_bwa_default.ini ./
 # Fix ini since we subsampled
@@ -636,12 +645,14 @@ ${STRELKA_HOME}/bin/configureStrelkaWorkflow.pl \
 ```
 
 Now we have variants from all three methods. Let's compress and index the vcfs for futur visualisation.
-```
+
+``` {.bash}
 for i in pairedVariants/*.vcf;do bgzip -c $i > $i.gz ; tabix -p vcf $i.gz;done
 ```
 
 Let's look at a compressed vcf.
-```
+
+``` {.bash}
 zless -S variants/mpileup.vcf.gz
 ```
 
@@ -655,7 +666,8 @@ The ref vs alt alleles, variant quality (QUAL column) and the per-sample genotyp
 We typically use snpEff but many use annovar and VEP as well.
 
 Let's run snpEff
-```
+
+``` {.bash}
 # SnpEff
 java7  -Xmx6G -jar ${SNPEFF_HOME}/snpEff.jar \
   eff -v -c ${SNPEFF_HOME}/snpEff.config \
@@ -668,6 +680,7 @@ java7  -Xmx6G -jar ${SNPEFF_HOME}/snpEff.jar \
 
 less -S pairedVariants/mpileup.snpeff.vcf
 ```
+
 We can see in the vcf that snpEff added a few sections. These are hard to decipher directly from the VCF other tools or scripts,
 need to be used to make sens of this.
 
@@ -678,9 +691,7 @@ Take a look at the HTML stats file snpEff created. It contains some metrics on t
 ## Visualisation
 Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
 
-Try this:
-
-```
+``` {.bash}
 # Coverage Track
 for i in normal tumor
 do
