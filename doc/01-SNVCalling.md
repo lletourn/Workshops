@@ -5,7 +5,7 @@ This workshop will show you how to launch individual steps of a complete DNA-Seq
 All the documentation for the practicals can be found on github here:  
 https://github.com/lletourn/Workshops/tree/ebiCancerWorkshop201407
 
-## Data Soruce
+## Data Source
 We will be working on a CageKid sample pair, patient C0098.
 The CageKid project is part of ICGC and is focused on renal cancer in many of it's forms.
 The raw data can be found on EGA and calls, RNA and DNA, can be found on the ICGC portal. 
@@ -41,6 +41,7 @@ export GATK_JAR=$APP_ROOT/gatk/GenomeAnalysisTK.jar
 export BVATOOLS_JAR=$APP_ROOT/bvatools-1.3/bvatools-1.3-full.jar
 export TRIMMOMATIC_JAR=$APP_ROOT/Trimmomatic-0.32/trimmomatic-0.32.jar
 export STRELKA_HOME=$APP_ROOT/strelka-1.0.13/
+export MUTECT_JAR=$APP_ROOT/muTect-1.1.4-bin/muTect-1.1.4.jar
 export REF=/home/training/ebiCancerWorkshop201407/references/
 
 cd $HOME/ebiCancerWorkshop201407
@@ -611,7 +612,7 @@ java -Xmx2G -jar ${MUTECT_JAR} \
   -T MuTect \
   -R ${REF}/b37.fasta \
   -dt NONE -baq OFF --validation_strictness LENIENT -nt 2 \
-  --dbsnp ${REF}/dbSnp-137.vcf \
+  --dbsnp ${REF}/dbSnp-137.vcf.gz \
   --cosmic ${REF}/b37_cosmic_v54_120711.vcf \
   --input_file:normal alignment/normal/normal.sorted.dup.recal.bam \
   --input_file:tumor alignment/tumor/tumor.sorted.dup.recal.bam \
@@ -662,6 +663,7 @@ http://vcftools.sourceforge.net/specs.html
 Fields vary from caller to caller. Some values are more constant.
 The ref vs alt alleles, variant quality (QUAL column) and the per-sample genotype (GT) values are almost always there.
 
+
 # Annotations
 We typically use snpEff but many use annovar and VEP as well.
 
@@ -711,11 +713,17 @@ Open it and choose b37 as the genome
 Open your BAM file, the tdf we just generated should load.
 Load your vcfs as well.
 
-Find an indel. What's different between the snp callers? [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_vis.ex1.md)
-Go to 19:50500000-52502000 what is interesting here?  [Solution](https://github.com/lletourn/Workshops/blob/ebiCancerWorkshop201407/solutions/_vis.ex2.md)
+Let's find somatic variants
+```
+#SAMtools
+cat pairedVariants/mpileup.vcf | perl -ne 'my @values=split("\t"); my ($clr) = $values[7] =~ /CLR=(\d+)/; if(defined($clr) && $clr >= 90 && $values[5] >= 100) {print "$_"}'
 
-Look around...
+# MuTecT
+zgrep -v REJECT pairedVariants/mutect.vcf | grep -v "^#"
 
+# Strelka
+ grep -v "^#" pairedVariants/strelka.vcf
+```
 
 ## Aknowledgments
 The format for this tutorial has been inspired from Mar Gonzalez Porta of Embl-EBI, who I would like to thank and acknowledge. I also want to acknowledge Mathieu Bourgey, Francois Lefebvre, Maxime Caron and Guillaume Bourque for the help in building these pipelines and working with all the various datasets.
