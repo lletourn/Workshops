@@ -441,5 +441,34 @@ You could do this directly in R but
 2- When you have thousands of somatics, and/or hundreds of samples, R struggles to build de pairwise distance and the PCA. This is why we precompute it in java before.
 
 
+# Plot Depth Ratio and BAF
+For this step we will need a bigger dataset.
+
+Get the data from penelope (shared drive)
+Copy these files:
+
+```
+sampleFreq.tsv
+chr3.ref.tsv
+```
+in your work directory or
+
+```
+cp /media/sf_shared/Cancer\ Genomics/Louis\ Letourneau/*.tsv $HOME/ebiCancerWorkshop201407/
+```
+
+Then we will use BVATools to generate the graphs
+```
+java7 -Xmx5G -jar $BVATOOLS_JAR ratiobaf --snppos chr3.ref.tsv --basefreq sampleFreq.tsv --refdict references/b37.dict --plot --prefix sampleDepthRatioBaf
+```
+
+And now look at the results
+
+```
+eog *.png
+```
+
+What do you see?
+
 ## Aknowledgments
 The format for this tutorial has been inspired from Mar Gonzalez Porta of Embl-EBI, who I would like to thank and acknowledge. I also want to acknowledge Mathieu Bourgey, Francois Lefebvre, Maxime Caron and Guillaume Bourque for the help in building these pipelines and working with all the various datasets.
