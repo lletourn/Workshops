@@ -2,7 +2,7 @@
 This workshop will show you how to work with sequenced cancer datasets
 
 We will be working on a CageKid sample pair, patient C0098.
-The CageKid project is part of ICGC and is focused on renal cancer in many of it's forms.
+The CageKid project is part of the ICGC consortium and is focused on renal cancer in many of it's forms.
 The raw data can be found on EGA and calls, RNA and DNA, can be found on the ICGC portal.
 More details about CageKid here:
 http://www.cng.fr/cagekid/
@@ -14,7 +14,7 @@ This work is licensed under a [Creative Commons Attribution-ShareAlike 3.0 Unpor
 ## Table of contents
 
 1. **[Alignment and somatic SNV Calling](doc/01-SNVCalling.md)**
-2. **[Expoloratory Analysis](doc 10-Exploratory.md)**
+2. **[Exploratory Analysis](doc 10-Exploratory.md)**
 
 ## Material source
 The whole practical can be found here:  
