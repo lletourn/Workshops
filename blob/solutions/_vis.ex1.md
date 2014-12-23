@@ -1,1 +1,0 @@
-Pileup right aligns the indel, where haplotyper and UG left aligns it.

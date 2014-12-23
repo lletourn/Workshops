@@ -1,626 +1,405 @@
-# Introduction to DNA-Seq processing
-This workshop will show you how to launch individual steps of a complete DNA-Seq pipeline
-
-We will be working on a 1000 genome sample, NA12878. You can find the whole raw data on the 1000 genome website:
-http://www.1000genomes.org/data
-
-For practical reasons we subsampled the reads from the sample because running the whole dataset would take way too much time and resources.
-
-This work is licensed under a [Creative Commons Attribution-ShareAlike 3.0 Unported License](http://creativecommons.org/licenses/by-sa/3.0/deed.en_US). This means that you are able to copy, share and modify the work, as long as the result is distributed under the same license.
-
-## Original Setup
-
-The initial structure of your folders should look like this:
-```
-<ROOT>
-|-- raw_reads/               # fastqs from the center (down sampled)
-    `-- NA12878              # One sample directory
-        |-- runERR_1         # Lane directory by run number. Contains the fastqs
-        `-- runSRR_1         # Lane directory by run number. Contains the fastqs
-`-- project.nanuq.csv        # sample sheet
-```
-
-### Cheat sheets
-* [Unix comand line cheat sheet](http://sites.tufts.edu/cbi/files/2013/01/linux_cheat_sheet.pdf)
-
-### Environment setup
-```
-export PATH=$PATH:/home/Louis/tools/tabix-0.2.6/:/home/Louis/tools/igvtools_2.3.31/
-export PICARD_HOME=/usr/local/bin
-export SNPEFF_HOME=/home/Louis/tools/snpEff_v3_5_core/snpEff
-export GATK_JAR=/usr/local/bin/GenomeAnalysisTK.jar
-export BVATOOLS_JAR=/home/Louis/tools/bvatools-1.1/bvatools-1.1-full.jar
-export TRIMMOMATIC_JAR=/usr/local/bin/trimmomatic-0.32.jar
-export REF=/home/Louis/kyotoWorkshop/references/
-
-cd $HOME
-rsync -avP /home/Louis/cleanCopy/ $HOME/workshop/
-cd $HOME/workshop/
-```
-
-### Software requirements
-These are all already installed, but here are the original links.
-
-  * [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
-  * [BVATools](https://bitbucket.org/mugqic/bvatools/downloads)
-  * [SAMTools](http://sourceforge.net/projects/samtools/)
-  * [IGV](http://www.broadinstitute.org/software/igv/download)
-  * [BWA](http://bio-bwa.sourceforge.net/)
-  * [Genome Analysis Toolkit](http://www.broadinstitute.org/gatk/)
-  * [Picard](http://picard.sourceforge.net/)
-  * [SnpEff](http://snpeff.sourceforge.net/)
-
-
-# First data glance
-So you've just received an email saying that your data is ready for download from the sequencing center of your choice.
-The first thing to do is download it, the second thing is making sure it is of good quality.
-
-### Fastq files
-Let's first explore the fastq file.
-
-Try these commands
-```
-zless -S raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz
-
-zcat raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz | head -n4
-zcat raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair2.fastq.gz | head -n4
-```
-From the second set of commands (the head), what was special about the output?
-Why was it like that?
-[Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_fastq.ex1.md)
-
-You could also just count the reads
-```
-zgrep -c "^@SRR" raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz
-```
-Why shouldn't you just do
-```
-zgrep -c "^@" raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz
-```
-[Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/_fastq.ex2.md)
-
-
-### Quality
-We can't look at all the reads. Especially when working with whole genome 30x data. You could easilly have Billions of reads.
-
-Tools like FastQC and BVATools readsqc can be used to plot many metrics from these data sets.
-
-Let's look at the data:
-
-```
-mkdir originalQC/
-java -Xmx1G -jar ${BVATOOLS_JAR} readsqc \
-  --read1 raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz \
-  --read2 raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair2.fastq.gz \
-  --threads 2 --regionName SRR --output originalQC/
-
-java -Xmx1G -jar ${BVATOOLS_JAR} readsqc \
-  --read1 raw_reads/NA12878/runERR_1/NA12878.ERR.33.pair1.fastq.gz \
-  --read2 raw_reads/NA12878/runERR_1/NA12878.ERR.33.pair2.fastq.gz \
-  --threads 2 --regionName ERR --output originalQC/
-```
-
-Copy the images from the ```originalQC``` folder to your desktop and open the images.
-
-```
-scp -r <USER>@www.genome.med.kyoto-u.ac.jp:~/workshop/originalQC/ ./
-```
-
-What stands out in the graphs?
-[Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_fastqQC.ex1.md)
-
-All the generated graphics have their uses. This being said 2 of them are particularly useful to get an overal picture of how good or bad a run went. These are the Quality box plots and the nucleotide content graphs.
-
-The Box plot shows the quality distribution of your data. In this case the reasons there are spikes and jumps in quality and length is because there are actually different libraries pooled together in the 2 fastq files. The sequencing lengths vary between 36,50,76 bp read lengths. The Graph goes > 100 because both ends are appended one after the other.
-
-The quality of a base is computated using the Phread quality score.
-![Phred quality score formula](img/phredFormula.png)
-
-The formula outputs an integer that is encoded using an [ASCII](http://en.wikipedia.org/wiki/ASCII) table. The way the lookup is done is by taking the the phred score adding 33 and using this number as a lookup in the table. The Wikipedia entry for the [FASTQ format](http://en.wikipedia.org/wiki/FASTQ_format) has a summary of the varying values.
-
-Older illumina runs were using phred+64 instead of phred+33 to encode their fastq files.
-
-In the SRR dataset we also see some adapters.
-Why does this happen [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_fastqQC.ex2.md)
-
-
-### Trimming
-After this careful analysis of the raw data we see that
-- Some reads have bad 3' ends.
-- Some reads have adapter sequences in them.
-
-Although nowadays this doesn't happen often, it does still happen. In some cases, miRNA, it is expected to have adapters.
-
-Since they are not part of the genome of interest they should be removed if enough reads have them.
-
-To be able to remove the adapters we need to feed them to a tool. In this case we will use Trimmomatic. The dapter file is already in your work folder.
-We can look at the adapters
-```
-cat adapters.fa
-```
-Why are there 2 different ones? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_trim.ex1.md)
-
-
-Let's try removing them and see what happens.
-```
-mkdir -p reads/NA12878/runSRR_1/
-mkdir -p reads/NA12878/runERR_1/
-
-java -Xmx2G -cp $TRIMMOMATIC_JAR org.usadellab.trimmomatic.TrimmomaticPE -threads 2 -phred33 \
-  raw_reads/NA12878/runERR_1/NA12878.ERR.33.pair1.fastq.gz \
-  raw_reads/NA12878/runERR_1/NA12878.ERR.33.pair2.fastq.gz \
-  reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair1.fastq.gz \
-  reads/NA12878/runERR_1/NA12878.ERR.t20l32.single1.fastq.gz \
-  reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair2.fastq.gz \
-  reads/NA12878/runERR_1/NA12878.ERR.t20l32.single2.fastq.gz \
-  ILLUMINACLIP:adapters.fa:2:30:15 TRAILING:20 MINLEN:32 \
-  2> reads/NA12878/runERR_1/NA12878.ERR.trim.out
-
-java -Xmx2G -cp $TRIMMOMATIC_JAR org.usadellab.trimmomatic.TrimmomaticPE -threads 2 -phred33 \
-  raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair1.fastq.gz \
-  raw_reads/NA12878/runSRR_1/NA12878.SRR.33.pair2.fastq.gz \
-  reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz \
-  reads/NA12878/runSRR_1/NA12878.SRR.t20l32.single1.fastq.gz \
-  reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz \
-  reads/NA12878/runSRR_1/NA12878.SRR.t20l32.single2.fastq.gz \
-  ILLUMINACLIP:adapters.fa:2:30:15 TRAILING:20 MINLEN:32 \
-  2> reads/NA12878/runSRR_1/NA12878.SRR.trim.out
-
-cat reads/NA12878/runERR_1/NA12878.ERR.trim.out reads/NA12878/runSRR_1/NA12878.SRR.trim.out
-```
-
-What does Trimmomatic says it did? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_trim.ex2.md)
-
-Let's look at the graphs now
-
-```
-mkdir postTrimQC/
-java -Xmx1G -jar ${BVATOOLS_JAR} readsqc \
-  --read1 reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair1.fastq.gz \
-  --read2 reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair2.fastq.gz \
-  --threads 2 --regionName ERR --output postTrimQC/
-java -Xmx1G -jar ${BVATOOLS_JAR} readsqc \
-  --read1 reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz \
-  --read2 reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz \
-  --threads 2 --regionName SRR --output postTrimQC/
-```
-
-How does it look now? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_trim.ex3.md)
-
-
-# Alignment
-The raw reads are now cleaned up of artefacts we can align each lane separatly.
-
-Why should this be done separatly? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex1.md)
-
-```
-mkdir -p alignment/NA12878/runERR_1
-mkdir -p alignment/NA12878/runSRR_1
-
-bwa mem -M -t 2 \
-  -R '@RG\tID:ERR_ERR_1\tSM:NA12878\tLB:ERR\tPU:runERR_1\tCN:Broad Institute\tPL:ILLUMINA' \
-  ${REF}/b37.fasta \
-  reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair1.fastq.gz \
-  reads/NA12878/runERR_1/NA12878.ERR.t20l32.pair2.fastq.gz \
-  | java -Xmx2G -jar ${PICARD_HOME}/SortSam.jar \
-  INPUT=/dev/stdin \
-  OUTPUT=alignment/NA12878/runERR_1/NA12878.ERR.sorted.bam \
-  CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000
-
-bwa mem -M -t 2 \
-  -R '@RG\tID:SRR_SRR_1\tSM:NA12878\tLB:SRR\tPU:runSRR_1\tCN:Broad Institute\tPL:ILLUMINA' \
-  ${REF}/b37.fasta \
-  reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair1.fastq.gz \
-  reads/NA12878/runSRR_1/NA12878.SRR.t20l32.pair2.fastq.gz \
-  | java -Xmx2G -jar ${PICARD_HOME}/SortSam.jar \
-  INPUT=/dev/stdin \
-  OUTPUT=alignment/NA12878/runSRR_1/NA12878.SRR.sorted.bam \
-  CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000
-```
-
-Why is it important to set Read Group information? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex2.md)
-
-The details of the fields can be found in the SAM/BAM specifications [Here](http://samtools.sourceforge.net/SAM1.pdf)
-For most cases, only the sample name, platform unit and library one are important. 
-
-Why did we pipe the output of one to the other? Could we have done it differently? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_aln.ex3.md)
-
-We will explore the generated BAM latter.
-
-# Lane merging
-We now have alignments for each of the sequences lanes. This is not practical in it's current form. What we wan't to do now
-is merge the results into one BAM.
-
-Since we identified the reads in the BAM with read groups, even after the merging, we can still identify the origin of each read.
-
-```
-java -Xmx2G -jar ${PICARD_HOME}/MergeSamFiles.jar \
-  INPUT=alignment/NA12878/runERR_1/NA12878.ERR.sorted.bam \
-  INPUT=alignment/NA12878/runSRR_1/NA12878.SRR.sorted.bam \
-  OUTPUT=alignment/NA12878/NA12878.sorted.bam \
-  VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true
-``` 
-
-You should now have one BAM containing all your data.
-Let's double check
-```
-ls -l alignment/NA12878/
-samtools view -H alignment/NA12878/NA12878.sorted.bam | grep "^@RG"
-
-```
-
-You should have your 2 read group entries.
-Why did we use the ```-H``` switch? Try without. What happens? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_merge.ex1.md)
-
-## SAM/BAM
-Let's spend some time to explore bam files.
-
-try
-```
-samtools view alignment/NA12878/NA12878.sorted.bam | head -n2
-```
-
-Here you have examples of alignment results.
-A full description of the flags can be found in the SAM specification
-http://samtools.sourceforge.net/SAM1.pdf
-
-Try using picards explain flag site to understand what is going on with your reads
-http://picard.sourceforge.net/explain-flags.html
-
-The flag is the 2nd column.
-
-What do the flags of the first 2 reads mean? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_sambam.ex1.md)
-
-Let's take the 2nd one, the one that is in proper pair, and find it's pair.
-
-try
-```
-samtools view alignment/NA12878/NA12878.sorted.bam | grep ERR001733.2317763
-
-```
-
-Why did searching one name find both reads? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_sambam.ex2.md)
-
-You can use samtools to filter reads as well.
-
-```
-# Say you want to count the *un-aligned* reads you can use
-samtools view -c -f4 alignment/NA12878/NA12878.sorted.bam
-
-# Or you want to count the *aligned* reads you can use
-samtools view -c -F4 alignment/NA12878/NA12878.sorted.bam
-
-```
-How many reads mapped and unmapped were there? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_sambam.ex3.md)
-
-
-Another useful bit of information in the SAM is the CIGAR string.
-It's the 6th column in the file. This column explains how the alignment was achieved.
-M == base aligns *but doesn't have to be a match*. A SNP will have an M even if it disagrees with the reference.
-I == Insertion
-D == Deletion
-S == soft-clips. These are handy to find un removed adapters, viral insertions, etc.
-
-An in depth explanation of the CIGAR can be found [here](http://genome.sph.umich.edu/wiki/SAM)
-The exact details of the cigar string can be found in the SAM spec as well.
-Another good site
-
-# Cleaning up alignments
-We started by cleaning up the raw reads. Now we need to fix some alignments.
-
-The first step for this is to realign around indels and snp dense regions.
-The Genome Analysis toolkit has a tool for this called IndelRealigner.
-
-It basically runs in 2 steps
-1- Find the targets
-2- Realign them.
-
-```
-java -Xmx2G  -jar ${GATK_JAR} \
-  -T RealignerTargetCreator \
-  -R ${REF}/b37.fasta \
-  -o alignment/NA12878/realign.intervals \
-  -I alignment/NA12878/NA12878.sorted.bam \
-  -L 1
-
-java -Xmx2G -jar ${GATK_JAR} \
-  -T IndelRealigner \
-  -R ${REF}/b37.fasta \
-  -targetIntervals alignment/NA12878/realign.intervals \
-  -o alignment/NA12878/NA12878.realigned.sorted.bam \
-  -I alignment/NA12878/NA12878.sorted.bam
-
-```
-
-How could we make this go faster? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_realign.ex1.md)
-How many regions did it think needed cleaning? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_realign.ex2.md)
-
-Indel Realigner also makes sure the called deletions are left aligned when there is a microsat of homopolmer.
-```
-This
-ATCGAAAA-TCG
-into
-ATCG-AAAATCG
-
-or
-ATCGATATATATA--TCG
-into
-ATCG--ATATATATATCG
-```
-
-This makes it easier for down stream tools.
-
-# FixMates
-This step shouldn't be necessary...but it is.
-
-This goes through the BAM file and find entries which don't have their mate information written properly.
-
-This used to be a problem in the GATKs realigner, but they fixed it. It shouldn't be a problem with aligners like BWA, but there are always corner cases that create
-one-off corrdinates and such.
-
-This happened a lot with bwa backtrack. This happens less with bwa mem, but it still happens none the less.
-
-```
-java -Xmx2G -jar ${PICARD_HOME}/FixMateInformation.jar \
-  VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true SORT_ORDER=coordinate MAX_RECORDS_IN_RAM=500000 \
-  INPUT=alignment/NA12878/NA12878.realigned.sorted.bam \
-  OUTPUT=alignment/NA12878/NA12878.matefixed.sorted.bam
-```
-
-# Mark duplicates
-As the step says, this is to mark duplicate reads.
-What are duplicate reads? What are they caused by? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex1.md)
-What are the ways to detect them? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex2.md)
-
-Here we will use picards approach:
-```
-java -Xmx2G -jar ${PICARD_HOME}/MarkDuplicates.jar \
-  REMOVE_DUPLICATES=false CREATE_MD5_FILE=true VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true \
-  INPUT=alignment/NA12878/NA12878.matefixed.sorted.bam \
-  OUTPUT=alignment/NA12878/NA12878.sorted.dup.bam \
-  METRICS_FILE=alignment/NA12878/NA12878.sorted.dup.metrics
-```
-
-We can look in the metrics output to see what happened.
-We can see that it computed seperate measures for each library.
-Why is this important to do and not combine everything? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex3.md)
-
-How many duplicates were there? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_markdup.ex4.md)
-
-This is on the high side, usually or rather, now since this is old data, this should be <2% for 2-3 lanes.
-
-# Recalibration
-This is the last BAM cleaning up step.
-
-The goal for this step is to try to recalibrate base quality scores. The vendors tend to inflate the values of the bases in the reads.
-Also, this step tries to lower the scores of some biased motifs for some technologies.
-
-It runs in 2 steps, 
-1- Build covariates based on context and known snp sites
-2- Correct the reads based on these metrics
-
-```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T BaseRecalibrator \
-  -nct 2 \
-  -R ${REF}/b37.fasta \
-  -knownSites ${REF}/dbSnp-137.vcf.gz \
-  -L 1:47000000-47171000 \
-  -o alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp \
-  -I alignment/NA12878/NA12878.sorted.dup.bam
-
-java -Xmx2G -jar ${GATK_JAR} \
-  -T PrintReads \
-  -nct 2 \
-  -R ${REF}/b37.fasta \
-  -BQSR alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp \
-  -o alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -I alignment/NA12878/NA12878.sorted.dup.bam
-```
-
-Just to see how things change let's make GATK recalibrate after a first pass
-```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T BaseRecalibrator \
-  -nct 2 \
-  -R ${REF}/b37.fasta \
-  -knownSites ${REF}/dbSnp-137.vcf.gz \
-  -L 1:47000000-47171000 \
-  -o alignment/NA12878/NA12878.sorted.dup.recalibration_report.seconnd.grp \
-  -I alignment/NA12878/NA12878.sorted.dup.bam \
-  -BQSR alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp
-
-java -Xmx2G -jar ${GATK_JAR} \
-  -T AnalyzeCovariates \
-  -R ${REF}/b37.fasta \
-  -before alignment/NA12878/NA12878.sorted.dup.recalibration_report.grp \
-  -after alignment/NA12878/NA12878.sorted.dup.recalibration_report.seconnd.grp \
-  -csv BQSR.csv \
-  -plots BQSR.pdf
-```
-
-The graphs don't mean much because we downsampled the data quite a bit. With a true whole genome or whole exome dataset we can see a bigger effect.
-
-# Extract Metrics
-Once your whole bam is generated, it's always a good thing to check the data again to see if everything makes sens.
-
-## Compute coverage
-If you have data from a capture kit, you should see how well your targets worked
-
-Both GATK and BVATools have depth of coverage tools. We wrote our own in BVAtools because
-- GATK was deprecating theirs, but they changed their mind
-- GATK's is very slow
-- We were missing come output that we wanted from the GATK's one (GC per interval, valid pairs, etc)
-
-Here we'll use the GATK one
-```
-java  -Xmx2G -jar ${GATK_JAR} \
-  -T DepthOfCoverage \
-  --omitDepthOutputAtEachBase \
-  --summaryCoverageThreshold 10 \
-  --summaryCoverageThreshold 25 \
-  --summaryCoverageThreshold 50 \
-  --summaryCoverageThreshold 100 \
-  --start 1 --stop 500 --nBins 499 -dt NONE \
-  -R ${REF}/b37.fasta \
-  -o alignment/NA12878/NA12878.sorted.dup.recal.coverage \
-  -I alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -L 1:47000000-47171000
-
-# Look at the coverage
-less -S alignment/NA12878/NA12878.sorted.dup.recal.coverage.sample_interval_summary
-```
-
-Coverage is the expected ~30x. 
-summaryCoverageThreshold is a usefull function to see if your coverage is uniform.
-Another way is to compare the mean to the median. If both are almost equal, your coverage is pretty flat. If both are quite different
-That means something is wrong in your coverage. A mix of WGS and WES would show very different mean and median values.
-
-## Insert Size
-```
-java -Xmx2G -jar ${PICARD_HOME}/CollectInsertSizeMetrics.jar \
-  VALIDATION_STRINGENCY=SILENT \
-  REFERENCE_SEQUENCE=${REF}/b37.fasta \
-  INPUT=alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  OUTPUT=alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.tsv \
-  HISTOGRAM_FILE=alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.histo.pdf \
-  METRIC_ACCUMULATION_LEVEL=LIBRARY
-
-#look at the output
-less -S alignment/NA12878/NA12878.sorted.dup.recal.metric.insertSize.tsv
-```
-
-There is something interesting going on with our library ERR.
-From the pdf or the tab seperated file, can you tell what it is? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_insert.ex1.md)
-
-## Alignment metrics
-For the alignment metrics, we used to use ```samtools flagstat``` but with bwa mem since some reads get broken into pieces, the numbers are a bit confusing.
-You can try it if you want.
-
-We prefer the Picard way of computing metrics
-
-```
-java -Xmx2G -jar ${PICARD_HOME}/CollectAlignmentSummaryMetrics.jar \
-  VALIDATION_STRINGENCY=SILENT \
-  REFERENCE_SEQUENCE=${REF}/b37.fasta \
-  INPUT=alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  OUTPUT=alignment/NA12878/NA12878.sorted.dup.recal.metric.alignment.tsv \
-  METRIC_ACCUMULATION_LEVEL=LIBRARY
-
-# explore the results
-less -S alignment/NA12878/NA12878.sorted.dup.recal.metric.alignment.tsv
-
-```
-
-
-# Variant calling
-Here we will try 3 variant callers.
-I won't go into the details of finding which variant is good or bad since this will be your next workshop.
-Here we will just call and view the variants.
-
-Start with:
-```
-mkdir variants
-```
-
-## Samtools
-```
-samtools mpileup -L 1000 -B -q 1 -D -S -g \
-  -f ${REF}/b37.fasta \
-  -r 1:47000000-47171000 \
-  alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  | bcftools view -vcg - \
-  > variants/mpileup.vcf
-```
-
-## GATK Unified Genotyper
-```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T UnifiedGenotyper \
-  -R ${REF}/b37.fasta \
-  -I alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -o variants/ug.vcf \
-  --genotype_likelihoods_model BOTH \
-  -dt none \
-  -L 1:46000000-47600000
-```
-
-## GATK Haplotyper
-```
-java -Xmx2G -jar ${GATK_JAR} \
-  -T HaplotypeCaller \
-  -R ${REF}/b37.fasta \
-  -I alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  -o variants/haplo.vcf \
-  -dt none \
-  -L 1:46000000-47600000
-```
-
-Now we have variants from all three methods. Let's compress and index the vcfs for futur visualisation.
-```
-for i in variants/*.vcf;do bgzip -c $i > $i.gz ; tabix -p vcf $i.gz;done
-```
-
-Let's look at a compressed vcf.
-```
-zless -S variants/mpileup.vcf.gz
-```
-
-Details on the spec can be found here:
-http://vcftools.sourceforge.net/specs.html
-
-Fields vary from caller to caller. Some values are more constant.
-The ref vs alt alleles, variant quality (QUAL column) and the per-sample genotype (GT) values are almost always there.
-
-# Annotations
-We typically use snpEff but many use annovar and VEP as well.
-
-Let's run snpEff
-```
-java  -Xmx6G -jar ${SNPEFF_HOME}/snpEff.jar \
-  eff -v -c ${SNPEFF_HOME}/snpEff.config \
-  -o vcf \
-  -i vcf \
-  -stats variants/mpileup.snpeff.vcf.stats.html \
-  GRCh37.74 \
-  variants/mpileup.vcf \
-  > variants/mpileup.snpeff.vcf
-
-less -S variants/mpileup.snpeff.vcf
-```
-We can see in the vcf that snpEff added a few sections. These are hard to decipher directly from the VCF other tools or scripts,
-need to be used to make sens of this.
-
-For now we will skip this step since you will be working with gene annotations in your next workshop.
-
-Take a look at the HTML stats file snpEff created. It contains some metrics on the variants it analysed.
-
-## Visualisation
-Before jumping into IGV, we'll generate a track IGV can use to plot coverage.
-
-Try this:
-
-```
-igvtools count \
-  -f min,max,mean \
-  alignment/NA12878/NA12878.sorted.dup.recal.bam \
-  alignment/NA12878/NA12878.sorted.dup.recal.bam.tdf \
-  b37
-```
-
-# IGV
-You can get IGV [here](http://www.broadinstitute.org/software/igv/download)
-
-Open it and choose b37 as the genome
-
-Open your BAM file, the tdf we just generated should load.
-Load your vcfs as well.
-
-Find an indel. What's different between the snp callers? [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_vis.ex1.md)
-Go to 1:47050562-47051207 what is interesting here?  [Solution](https://github.com/lletourn/Workshops/blob/kyoto201403/blob/solutions/_vis.ex2.md)
-
-Look around...
-
-
-## Aknowledgments
-The format for this tutorial has been inspired from Mar Gonzalez Porta of Embl-EBI, who I would like to thank and acknowledge. I also want to acknowledge Mathieu Bourgey, Francois Lefebvre, Maxime Caron and Guillaume Bourque for the help in building these pipelines and working with all the various datasets.
+#---PREPARING THE REFERENCE -----
+
+cd /lb/project/mugqic/projects/cshl201411/
+for i in G_*;do mkdir -p ${i}/browser/draft ; mkdir -p ${i}/browser/miseq ; mkdir -p ${i}/browser/final;done
+
+#Assembly = multi fasta file of un-ono contigs CONTIG_FILE.FA
+#To select the contigs >1kb:
+# - put the fasta file on one line
+for i in G_*;do 
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/draft
+  ln -s ../../pacbio_assembly/${i}/30X/merSize14/report/consensus.fasta.gz ./
+  zcat consensus.fasta.gz | perl /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl /dev/stdin > ${i}.draft.fasta
+done
+
+for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq
+  cat Scaffolds.fasta | perl /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl /dev/stdin > ${i}.miseq.fasta
+done
+
+for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final
+  perl /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl polish1_out/data/consensus.fasta > ${i}.final.fasta
+done
+
+
+#Rename contigs part 1-X
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do 
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/draft
+  # order contigs from biggest to smallest
+  perl /lb/project/compgen/jwassers/Perl/sort_fasta_by_length.pl ${i}.draft.fasta | awk 'BEGIN {IDX=1} {if($0 ~ /^>/){print ">part" IDX;IDX+=1;} else {print $0}}' > ${i}.draft.sorted.fasta
+
+  #(#Extra step for bacterial genomes (circular): we want to cut the 1st contig in the middle (call the pieces contigN_start and contigN_end), move the 1st piece at the end of the fasta file > circ.CONTIG_FILE.FA)
+ 
+  # To insert 10kb spacers in between contigs
+  perl  /lb/project/mugqic/projects/cshl201411/add_spacers_in_ref.pl  ${i}.draft.sorted.fasta  10000  | perl /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl /dev/stdin > ${i}.draft.ref.fa
+done
+
+# MiSeq
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq;
+  perl /lb/project/compgen/jwassers/Perl/sort_fasta_by_length.pl  ${i}.miseq.fasta | awk 'BEGIN {IDX=1} {if($0 ~ /^>/){print ">part"  IDX;IDX+=1;} else {print $0}}' > ${i}.miseq.sorted.fasta;
+
+  perl  /lb/project/mugqic/projects/cshl201411/add_spacers_in_ref.pl   ${i}.miseq.sorted.fasta  30000  | perl   /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl   /dev/stdin > ${i}.miseq.ref.fa;
+done
+
+# Final, circularized
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  perl /lb/project/compgen/jwassers/Perl/sort_fasta_by_length.pl  ${i}.final.fasta | awk 'BEGIN {IDX=1} {if($0 ~ /^>/){print ">part"  IDX;IDX+=1;} else {print $0}}' > ${i}.final.sorted.fasta ; 
+  perl  /lb/project/mugqic/projects/cshl201411/add_spacers_in_ref.pl   ${i}.final.sorted.fasta 30000  | perl   /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl   /dev/stdin > ${i}.final.ref.fa;
+done
+
+#---PREPARING THE CONTIG TRACK-----
+ 
+#Blat the contigs against the ref, select best hit and do pslToBed
+module load mugqic/ucsc/20140212
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  echo $i;
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/draft;
+  blat ${i}.draft.ref.fa ${i}.draft.sorted.fasta -stepSize=5 -tileSize=11 -minScore=0 -minIdentity=0 -noHead contigs.psl;
+  awk  '{OFS="\t"} {print $1+$3-$2-$5-$7, $0}' contigs.psl |  sort -S1G +10 -11 +0 -1nr | awk '!($11 in l){print;l[$11]=1}' | cut -f 2-22 > bh.contigs.psl;
+  pslToBed bh.contigs.psl bh.contigs.bed;
+done
+
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  echo $i;
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq;
+  blat ${i}.miseq.ref.fa ${i}.miseq.sorted.fasta -stepSize=5 -tileSize=11 -minScore=0 -minIdentity=0 -noHead contigs.psl;
+  awk  '{OFS="\t"} {print $1+$3-$2-$5-$7, $0}' contigs.psl |  sort -S1G +10 -11 +0 -1nr | awk '!($11 in l){print;l[$11]=1}' | cut -f 2-22 > bh.contigs.psl;
+  pslToBed bh.contigs.psl bh.contigs.bed;
+done
+
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  echo $i;
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  blat ${i}.final.ref.fa ${i}.final.sorted.fasta -stepSize=5 -tileSize=11 -minScore=0 -minIdentity=0 -noHead contigs.psl;
+  awk  '{OFS="\t"} {print $1+$3-$2-$5-$7, $0}' contigs.psl |  sort -S1G +10 -11 +0 -1nr | awk '!($11 in l){print;l[$11]=1}' | cut -f 2-22 > bh.contigs.psl;
+  pslToBed bh.contigs.psl bh.contigs.bed;
+done
+#---TO CHANGE THE TRACK DEFINITIONS and UPDATE THE BROWSER -----
+ 
+#The location of your track configuration file :
+/data/share/ucsc/track25112010/Leishmania/BUILD/trackDb.ra
+ 
+#Whenever that file gets modified, to "refresh" the browser :
+cd /data/share/ucsc/track25112010
+make alpha DBS=BUILD
+
+#---PACBIO DATASET---------*
+module load mugqic/blast/2.2.29+
+
+cd /lb/project/mugqic/projects/cshl201411/
+for i in G*;do
+  echo $i;
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/;
+  ln -s ../pacbio_assembly/${i}/filtering/data/filtered_subreads.fasta ./;
+
+  #Filter 3kb+ PacBio reads
+  perl /lb/project/mugqic/projects/cshl201411/clean_newline_multifasta.pl filtered_subreads.fasta > filtered_subreads.oneLine.fasta;
+  perl -p -e "s/>(\S+)\n/>\1 /g;" filtered_subreads.oneLine.fasta | awk '{if(length($2)>=3000){print}}' | perl -p -e "s/>(\S+) />\1\n/g;"  > 3kb.PB.fa;
+  perl -p -e "s/>(\S+)\n/>\1 /g;" filtered_subreads.oneLine.fasta | awk '{if(length($2)>=7000){print}}' | perl -p -e "s/>(\S+) />\1\n/g;"  > 7kb.PB.fa;
+
+  #Create blastable database
+  cd draft;
+  makeblastdb -in ${i}.draft.ref.fa -dbtype nucl;
+
+  #Blast PacBio reads
+  blastn -task dc-megablast -query ../3kb.PB.fa -strand both -db ${i}.draft.ref.fa  -outfmt 6 -out 3kb.PB.out &
+  blastn -task dc-megablast -query ../7kb.PB.fa -strand both -db ${i}.draft.ref.fa  -outfmt 6 -out 7kb.PB.out &
+done
+
+# Miseq
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq;
+  makeblastdb -in ${i}.miseq.ref.fa -dbtype nucl;
+  blastn -task dc-megablast -query ../3kb.PB.fa -strand both -db ${i}.miseq.ref.fa  -outfmt 6 -out 3kb.PB.out &
+  blastn -task dc-megablast -query ../7kb.PB.fa -strand both -db ${i}.miseq.ref.fa  -outfmt 6 -out 7kb.PB.out &
+done
+
+# Final
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  makeblastdb -in ${i}.final.ref.fa -dbtype nucl;
+  blastn -task dc-megablast -query ../3kb.PB.fa -strand both -db ${i}.final.ref.fa  -outfmt 6 -out 3kb.PB.out &
+  blastn -task dc-megablast -query ../7kb.PB.fa -strand both -db ${i}.final.ref.fa  -outfmt 6 -out 7kb.PB.out &
+done
+
+cd /lb/project/mugqic/projects/cshl201411/
+module load mugqic/exonerate;
+for i in G_[46]*;do
+  echo $i
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/draft/;
+  #Keep hits for criterias 80% id + 500bp span min
+  awk '{print $0,$8-$7}' 3kb.PB.out | awk '{if ($3>=80 && $13>=500) print $0}' > 80.500.3kb.PB.out;
+  awk '{print $0,$8-$7}' 7kb.PB.out | awk '{if ($3>=80 && $13>=500) print $0}' > 80.500.7kb.PB.out;
+
+  #Select best hit (bh)
+  sort -k 13nr -k 1 80.500.3kb.PB.out | awk '{if(l[$1]<1){print;l[$1]+=1}}' > bh.80.500.3kb.PB.out;
+  sort -k 13nr -k 1 80.500.7kb.PB.out | awk '{if(l[$1]<1){print;l[$1]+=1}}' > bh.80.500.7kb.PB.out;
+
+  #Make PacBio bed track
+  fastalength ${i}.draft.ref.fa;
+  SZ=`fastalength ${i}.draft.ref.fa | cut -f1 -d' '`
+  perl /lb/project/compgen/jwassers/Perl/generate_tracks_for_pacbio_reads.pl bh.80.500.3kb.PB.out ${SZ} >  bh.80.500.3kb.PB.bed;
+  perl /lb/project/compgen/jwassers/Perl/generate_tracks_for_pacbio_reads.pl bh.80.500.7kb.PB.out ${SZ} >  bh.80.500.7kb.PB.bed;
+done
+
+# Miseq
+cd /lb/project/mugqic/projects/cshl201411/
+module load mugqic/exonerate;
+for i in G_*;do
+  echo $i
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq/;
+  awk '{print $0,$8-$7}' 3kb.PB.out | awk '{if ($3>=80 && $13>=500) print $0}' > 80.500.3kb.PB.out;
+  awk '{print $0,$8-$7}' 7kb.PB.out | awk '{if ($3>=80 && $13>=500) print $0}' > 80.500.7kb.PB.out;
+
+  sort -k 13nr -k 1 80.500.3kb.PB.out | awk '{if(l[$1]<1){print;l[$1]+=1}}' > bh.80.500.3kb.PB.out;
+  sort -k 13nr -k 1 80.500.7kb.PB.out | awk '{if(l[$1]<1){print;l[$1]+=1}}' > bh.80.500.7kb.PB.out;
+  fastalength ${i}.miseq.ref.fa;
+  SZ=`fastalength ${i}.miseq.ref.fa | cut -f1 -d' '`
+  perl /lb/project/compgen/jwassers/Perl/generate_tracks_for_pacbio_reads.pl bh.80.500.3kb.PB.out ${SZ} >  bh.80.500.3kb.PB.bed;
+  perl /lb/project/compgen/jwassers/Perl/generate_tracks_for_pacbio_reads.pl bh.80.500.7kb.PB.out ${SZ} >  bh.80.500.7kb.PB.bed;
+done
+
+# Final
+module load mugqic/exonerate;
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  echo $i
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  awk '{print $0,$8-$7}' 3kb.PB.out | awk '{if ($3>=80 && $13>=500) print $0}' > 80.500.3kb.PB.out;
+  awk '{print $0,$8-$7}' 7kb.PB.out | awk '{if ($3>=80 && $13>=500) print $0}' > 80.500.7kb.PB.out;
+
+  sort -k 13nr -k 1 80.500.3kb.PB.out | awk '{if(l[$1]<1){print;l[$1]+=1}}' > bh.80.500.3kb.PB.out;
+  sort -k 13nr -k 1 80.500.7kb.PB.out | awk '{if(l[$1]<1){print;l[$1]+=1}}' > bh.80.500.7kb.PB.out;
+  fastalength ${i}.final.ref.fa;
+  SZ=`fastalength ${i}.final.ref.fa | cut -f1 -d' '`
+  perl /lb/project/compgen/jwassers/Perl/generate_tracks_for_pacbio_reads.pl bh.80.500.3kb.PB.out ${SZ} >  bh.80.500.3kb.PB.bed;
+  perl /lb/project/compgen/jwassers/Perl/generate_tracks_for_pacbio_reads.pl bh.80.500.7kb.PB.out ${SZ} >  bh.80.500.7kb.PB.bed;
+done
+
+*#---ILLUMINA DATASET----------*
+# Assemble with Ray
+cd G_089/browser/miseq/ray/k31
+# try k21, k31, k41
+vim ray.pbs # adjust kmer et al.
+qsub ray.pbs
+
+# after assembly, launch flanking k to find best asm.
+
+# convert the fastq in fasta
+cd /lb/project/mugqic/projects/cshl201411/
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP1-089_S5_L001_R1_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP1-089_S5_L001_R1_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_089/browser/MISEQ_1.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP1-089_S5_L001_R2_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP1-089_S5_L001_R2_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_089/browser/MISEQ_2.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP2-6920_S6_L001_R1_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP2-6920_S6_L001_R1_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_6920/browser/MISEQ_1.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP2-6920_S6_L001_R2_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP2-6920_S6_L001_R2_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_6920/browser/MISEQ_2.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP3-6919_S7_L001_R1_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP3-6919_S7_L001_R1_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_6914/browser/MISEQ_1.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP3-6919_S7_L001_R2_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP3-6919_S7_L001_R2_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_6914/browser/MISEQ_2.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP4-4681_S8_L001_R1_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP4-4681_S8_L001_R1_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_4681/browser/MISEQ_1.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/GROUP4-4681_S8_L001_R2_001.fastq.gz miseq_cshlws_10282014/M02986/GROUP4-4681_S8_L001_R2_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_4681/browser/MISEQ_2.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/VM-690_S1_L001_R1_001.fastq.gz miseq_cshlws_10282014/M02986/VM-690_S1_L001_R1_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_690/browser/MISEQ_1.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/VM-690_S1_L001_R2_001.fastq.gz miseq_cshlws_10282014/M02986/VM-690_S1_L001_R2_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_690/browser/MISEQ_2.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/VM-698_S2_L001_R1_001.fastq.gz miseq_cshlws_10282014/M02986/VM-698_S2_L001_R1_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_698/browser/MISEQ_1.fasta &
+zgrep -A1 "^@M0[02]" miseq_cshlws_10282014/M00557/VM-698_S2_L001_R2_001.fastq.gz miseq_cshlws_10282014/M02986/VM-698_S2_L001_R2_001.fastq.gz | grep -v "\-\-"|sed 's/.*gz://g'|perl -p -e "s/\@M0/\>M0/;" > G_698/browser/MISEQ_2.fasta &
+time wait
+
+
+cd /lb/project/mugqic/projects/cshl201411/
+module load mugqic/ucsc/20140212 mugqic/samtools/0.1.19-gpfs mugqic/bedtools/2.17.0
+for i in G_[46]*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/;
+  cat MISEQ_1.fasta MISEQ_2.fasta > MISEQ.fasta;
+
+  # keep only the 1st 150bp if necessary
+  #   cut -b 1-150 MISEQ.fasta > MiSeq.150.fa
+
+  #Blat reads
+  cd draft;
+  blat ${i}.draft.ref.fa ../MISEQ.fasta -stepSize=5 -tileSize=11 -minScore=0 -minIdentity=0 -noHead MiSeq.psl &
+done;
+time wait
+
+# MiSeq
+module load mugqic/ucsc/20140212 mugqic/samtools/0.1.19-gpfs mugqic/bedtools/2.17.0
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq;
+  blat ${i}.miseq.ref.fa ../MISEQ.fasta -stepSize=5 -tileSize=11 -minScore=0 -minIdentity=0 -noHead MiSeq.psl &
+done;
+time wait
+
+# Final
+module load mugqic/ucsc/20140212 mugqic/samtools/0.1.19-gpfs mugqic/bedtools/2.17.0
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  blat ${i}.final.ref.fa ../MISEQ.fasta -stepSize=5 -tileSize=11 -minScore=0 -minIdentity=0 -noHead MiSeq.psl &
+done;
+time wait
+
+cd /lb/project/mugqic/projects/cshl201411/
+for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/draft;
+  #Select all perfect hits (ph)
+  awk  '{if($1==$11 && $2==0 && $3==0 && $4==0 && $5==0 && $6==0 && $7==0 && $8==0){print $0}}' MiSeq.psl > allph.MiSeq.psl
+  awk  '{if($1 >= ($11*0.8) && $2==0 && $3==0 && $4==0 && $5==0 && $6==0 && $7==0 && $8==0){print $0}}' MiSeq.psl > allGood.MiSeq.psl
+
+  #Make bed track
+  pslToBed allph.MiSeq.psl allph.MiSeq.bed
+  pslToBed allGood.MiSeq.psl allGood.MiSeq.bed
+
+  #Make 0_coverage_in_MiSeq_reads track
+  samtools faidx ${i}.draft.ref.fa
+  genomeCoverageBed -d -i allph.MiSeq.bed -g ${i}.draft.ref.fa.fai > CVG.TBL
+
+  #  select positions where coverage=0
+  awk '{if($3==0){print $0;}}' CVG.TBL > 0CVG
+
+  #  make the bed track
+  perl /lb/project/mugqic/projects/cshl201411/generate_track_of_covered_genome.pl 0CVG > NO_CVG_IN_MISEQ.bed
+done
+
+# MiSeq
+cd /lb/project/mugqic/projects/cshl201411/
+module load mugqic/ucsc/20140212 mugqic/samtools/0.1.19-gpfs mugqic/bedtools/2.17.0
+for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/miseq;
+  awk  '{if($1==$11 && $2==0 && $3==0 && $4==0 && $5==0 && $6==0 && $7==0 && $8==0){print $0}}' MiSeq.psl > allph.MiSeq.psl
+  awk  '{if($1 >= ($11*0.8) && $2==0 && $3==0 && $4==0 && $5==0 && $6==0 && $7==0 && $8==0){print $0}}' MiSeq.psl > allGood.MiSeq.psl
+  pslToBed allph.MiSeq.psl allph.MiSeq.bed
+  pslToBed allGood.MiSeq.psl allGood.MiSeq.bed
+  samtools faidx ${i}.miseq.ref.fa
+  genomeCoverageBed -d -i allph.MiSeq.bed -g ${i}.miseq.ref.fa.fai > CVG.TBL
+  awk '{if($3==0){print $0;}}' CVG.TBL > 0CVG
+  perl /lb/project/mugqic/projects/cshl201411/generate_track_of_covered_genome.pl 0CVG > NO_CVG_IN_MISEQ.bed
+done
+
+# Final
+module load mugqic/ucsc/20140212 mugqic/samtools/0.1.19-gpfs mugqic/bedtools/2.17.0
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  awk  '{if($1==$11 && $2==0 && $3==0 && $4==0 && $5==0 && $6==0 && $7==0 && $8==0){print $0}}' MiSeq.psl > allph.MiSeq.psl
+  awk  '{if($1 >= ($11*0.8) && $2==0 && $3==0 && $4==0 && $5==0 && $6==0 && $7==0 && $8==0){print $0}}' MiSeq.psl > allGood.MiSeq.psl
+  pslToBed allph.MiSeq.psl allph.MiSeq.bed
+  pslToBed allGood.MiSeq.psl allGood.MiSeq.bed
+  samtools faidx ${i}.final.ref.fa
+  genomeCoverageBed -d -i allph.MiSeq.bed -g ${i}.final.ref.fa.fai > CVG.TBL
+  awk '{if($3==0){print $0;}}' CVG.TBL > 0CVG
+  perl /lb/project/mugqic/projects/cshl201411/generate_track_of_covered_genome.pl 0CVG > NO_CVG_IN_MISEQ.bed
+done
+
+cd /lb/project/mugqic/projects/cshl201411/ ; for i in G_*;do
+  cd /lb/project/mugqic/projects/cshl201411/${i}/browser/final;
+  zgrep -v "^#" motif_out/data/motifs.gff.gz | perl -n -e 'my @val=split(/\t/); $val[8] =~ /.*IPDRatio=([-.0-9]+)/ ; if($val[6] eq "+") {print "chr1\t".($val[3]-1)."\t".$val[4]."\t$1\n"}' >ipdratio_F.bed
+  zgrep -v "^#" motif_out/data/motifs.gff.gz | perl -n -e 'my @val=split(/\t/); $val[8] =~ /.*IPDRatio=([-.0-9]+)/ ; if($val[6] eq "-") {print "chr1\t".($val[3]-1)."\t".$val[4]."\t$1\n"}' >ipdratio_R.bed
+done
+
+
+#---PREPARING THE BROWSER------
+On the vervet server
+ 
+export CLIENT_NAME=CSHL_2014
+/data/share/bin/cgb/cgb create_browser
+/data/share/bin/cgb/cgb add_clade       CSHL_2014 CSHL_2014 1
+/data/share/bin/cgb/cgb add_genome G_089 CSHL_2014 1
+/data/share/bin/cgb/cgb add_genome G_690 CSHL_2014 2
+/data/share/bin/cgb/cgb add_genome G_698 CSHL_2014 3
+/data/share/bin/cgb/cgb add_genome G_4681 CSHL_2014 4
+/data/share/bin/cgb/cgb add_genome G_6914 CSHL_2014 5
+/data/share/bin/cgb/cgb add_genome G_6920 CSHL_2014 6
+
+cd /data/share/lletourn/cshl201411/;
+for i in G_[46]*;do
+  /data/share/bin/cgb/cgb add_build ${i}_draft "Pacbio Draft build" ${i} part1 ${i} source 1234
+
+  #Load the reference into the browser
+  /data/share/bin/cgb/cgb add_fasta        ${i}_draft part1 ${i}/browser/draft/${i}.draft.ref.fa
+  /data/share/bin/cgb/cgb add_defaultdb    ${i} ${i}_draft
+done
+
+cd /data/share/lletourn/cshl201411/;for i in G_*;do
+  /data/share/bin/cgb/cgb add_build ${i}_miseq "MiSeq Build" ${i} part1 ${i} source 1234
+
+  /data/share/bin/cgb/cgb add_fasta        ${i}_miseq part1 ${i}/browser/miseq/${i}.miseq.ref.fa
+done
+
+cd /data/share/lletourn/cshl201411/;for i in G_*;do
+  /data/share/bin/cgb/cgb add_build ${i}_final "Final build" ${i} part1 ${i} source 1234
+  /data/share/bin/cgb/cgb add_fasta        ${i}_final part1 ${i}/browser/final/${i}.final.ref.fa
+done
+
+#Turn on Blat for that reference :
+# check which ports are available :
+ps -afe | grep gfServer
+
+# pick 2 ports that aren't used yet (random 5 digit numbers i.e 58100 58101)
+/data/share/bin/cgb/cgb add_blat  G_089_draft  50100  50101
+/data/share/bin/cgb/cgb add_blat  G_690_draft  50102  50103
+/data/share/bin/cgb/cgb add_blat  G_698_draft  50104  50105
+/data/share/bin/cgb/cgb add_blat  G_4681_draft  50106  50107
+/data/share/bin/cgb/cgb add_blat  G_6914_draft  50108  50109
+/data/share/bin/cgb/cgb add_blat  G_6920_draft  50110  50111
+
+/data/share/bin/cgb/cgb add_blat  G_089_miseq  50200  50201
+/data/share/bin/cgb/cgb add_blat  G_690_miseq  50202  50203
+/data/share/bin/cgb/cgb add_blat  G_698_miseq  50204  50205
+/data/share/bin/cgb/cgb add_blat  G_4681_miseq  50206  50207
+/data/share/bin/cgb/cgb add_blat  G_6914_miseq  50208  50209
+/data/share/bin/cgb/cgb add_blat  G_6920_miseq  50210  50211
+
+
+/data/share/bin/cgb/cgb add_blat  G_089_final  50300  50301
+/data/share/bin/cgb/cgb add_blat  G_690_final  50302  50303
+/data/share/bin/cgb/cgb add_blat  G_698_final  50304  50305
+/data/share/bin/cgb/cgb add_blat  G_4681_final  50306  50307
+/data/share/bin/cgb/cgb add_blat  G_6914_final  50308  50309
+/data/share/bin/cgb/cgb add_blat  G_6920_miseq  50310  50311
+
+cd /data/share/lletourn/cshl201411/;for i in G_*;do
+  cd /data/share/lletourn/cshl201411/${i}/browser/draft/;
+  #Load the contig track in the browser
+  hgLoadBed ${i}_draft contigs bh.contigs.bed;
+
+  #Load the Pacbio track
+  hgLoadBed ${i}_draft Pacbio3kb bh.80.500.3kb.PB.bed
+  hgLoadBed ${i}_draft Pacbio7kb bh.80.500.7kb.PB.bed
+
+  #Load the track Illumina
+  hgLoadBed ${i}_draft MiSeq_all_perfect_hits allph.MiSeq.bed
+  hgLoadBed ${i}_draft MiSeq_all_good_hits  allGood.MiSeq.psl
+
+  #Load the NoCVG track
+  hgLoadBed ${i}_draft no_cvg_in_MiSeq NO_CVG_IN_MISEQ.bed
+done
+
+cd /data/share/lletourn/cshl201411/;for i in G_*;do
+  cd /data/share/lletourn/cshl201411/${i}/browser/miseq;
+  hgLoadBed ${i}_miseq contigs bh.contigs.bed;
+  hgLoadBed ${i}_miseq Pacbio3kb bh.80.500.3kb.PB.bed
+  hgLoadBed ${i}_miseq Pacbio7kb bh.80.500.7kb.PB.bed
+  hgLoadBed ${i}_miseq MiSeq_all_perfect_hits allph.MiSeq.bed
+  hgLoadBed ${i}_miseq MiSeq_all_good_hits allGood.MiSeq.bed
+  hgLoadBed ${i}_miseq no_cvg_in_MiSeq NO_CVG_IN_MISEQ.bed
+done
+
+cd /data/share/lletourn/cshl201411/;for i in G_*;do
+  cd /data/share/lletourn/cshl201411/${i}/browser/final ; 
+  hgLoadBed ${i}_final contigs bh.contigs.bed;
+  hgLoadBed ${i}_final Pacbio3kb bh.80.500.3kb.PB.bed
+  hgLoadBed ${i}_final Pacbio7kb bh.80.500.7kb.PB.bed
+  hgLoadBed ${i}_final MiSeq_all_perfect_hits allph.MiSeq.bed
+  hgLoadBed ${i}_final MiSeq_all_good_hits allGood.MiSeq.bed
+  hgLoadBed ${i}_final no_cvg_in_MiSeq NO_CVG_IN_MISEQ.bed
+
+  hgLoadBed ${i}_final ipdratio_F ipdratio_F.bed
+  hgLoadBed ${i}_final ipdratio_R ipdratio_R.bed
+done
+
+# Update trackDb.ra
+cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_draft/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_miseq/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_draft/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_698_miseq/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_draft/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_4681_miseq/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_draft/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_6914_miseq/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_draft/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_6920_miseq/trackDb.ra
+
+cd /data/share/ucsc/trackDb20140214
+make alpha DBS=G_089_miseq ; make alpha DBS=G_690_miseq ; make alpha DBS=G_698_miseq ; make alpha DBS=G_4681_miseq ; make alpha DBS=G_6914_miseq ; make alpha DBS=G_6920_miseq
+
+cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_final/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_final/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_final/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_698_final/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_final/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_4681_final/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_final/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_6914_final/trackDb.ra ; cp /data/share/ucsc/trackDb20140214/CSHL_2014/G_089_final/trackDb.ra /data/share/ucsc/trackDb20140214/CSHL_2014/G_6920_final/trackDb.ra
+
+cd /data/share/ucsc/trackDb20140214
+make alpha DBS=G_089_final ; make alpha DBS=G_690_final ; make alpha DBS=G_698_final ; make alpha DBS=G_4681_final ; make alpha DBS=G_6914_final ; make alpha DBS=G_6920_final

@@ -1,2 +1,0 @@
-- For speed, you can align each in parallel
-- to track where the reads came from. We will set individual Read Group tags
