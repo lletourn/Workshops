@@ -6,7 +6,9 @@ You should be able to connect here:
 http://8085.genap3.moumout.org/ 
 
 Pick one of these username passwords:
+
 | user | passw |
+| ---- | ----- |
 | HGEN698-1@galaxy.genap.ca | pVftWn#dN37Qg |
 | HGEN698-2@galaxy.genap.ca | SMwNnX?8$7@3p |
 | HGEN698-3@galaxy.genap.ca | 3mwdi^AU!UBMS |
@@ -31,8 +33,8 @@ ssh -X <USER>@guillimin.hpc.mcgill.ca
 ```
 The -X is to be able to view graphics from that server (This is called X forwarding)
 
-
 | user | passw |
+| ---- | ----- |
 | class01 | y#KqbPowct |
 | class02 | Jq!Eysaq%K |
 | class03 | jfVgWjMSDJ |
