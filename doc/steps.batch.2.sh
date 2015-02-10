@@ -248,7 +248,7 @@ bedGraphToBigWig \
 #-------------------------------------------------------------------------------
 # JOB: htseq_count.brain
 #-------------------------------------------------------------------------------
-module load mugqic/samtools/0.1.19 mugqic/python/2.7.8 && \
+echo "module load mugqic/samtools/0.1.19 mugqic/python/2.7.8 && \
 mkdir -p raw_counts && \
 samtools view -F 4 \
   alignment/brain/brain.QueryNameSorted.bam | \
@@ -257,13 +257,13 @@ htseq-count - \
   --stranded=reverse \
   --format=sam \
   /software/areas/genomics/phase2/genomes/species/Homo_sapiens.GRCh37/annotations/Homo_sapiens.GRCh37.Ensembl75.gtf \
-  > raw_counts/brain.readcounts.csv
+  > raw_counts/brain.readcounts.csv" | qsub -V -m ae -M $JOB_MAIL -d . -j oe -N brain.htseq -l walltime=24:00:00 -q metaq -l nodes=1:ppn=2
 
 
 #-------------------------------------------------------------------------------
 # JOB: htseq_count.adrenal
 #-------------------------------------------------------------------------------
-module load mugqic/samtools/0.1.19 mugqic/python/2.7.8 && \
+echo "module load mugqic/samtools/0.1.19 mugqic/python/2.7.8 && \
 mkdir -p raw_counts && \
 samtools view -F 4 \
   alignment/adrenal/adrenal.QueryNameSorted.bam | \
@@ -272,7 +272,7 @@ htseq-count - \
   --stranded=reverse \
   --format=sam \
   /software/areas/genomics/phase2/genomes/species/Homo_sapiens.GRCh37/annotations/Homo_sapiens.GRCh37.Ensembl75.gtf \
-  > raw_counts/adrenal.readcounts.csv
+  > raw_counts/adrenal.readcounts.csv"  | qsub -V -m ae -M $JOB_MAIL -d . -j oe -N adrenal.htseq -l walltime=24:00:00 -q metaq -l nodes=1:ppn=2
 
 
 #-------------------------------------------------------------------------------
